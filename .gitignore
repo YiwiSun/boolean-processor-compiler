@@ -1,32 +1,12 @@
-# Prerequisites
-*.d
+# ignore all files
+*
+*.*
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# add target folder
 
-# Precompiled Headers
-*.gch
-*.pch
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+# add source files
+!*.cpp
+!*.h
+!*.c
+!Makefile
