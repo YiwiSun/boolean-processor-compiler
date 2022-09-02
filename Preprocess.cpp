@@ -227,11 +227,11 @@ void inter::preprocess(string& v_path) {
 
     // topology order
     // cout << "Generating hierarchical network." << " ";
-    auto start_top = chrono::steady_clock::now();
+    // auto start_top = chrono::steady_clock::now();
     SetInDegrees(adjList, indegrees);
     TopologyOrder(adjList, indegrees, n, levels);
-    auto end_top = chrono::steady_clock::now();
-    long duration_top = chrono::duration_cast<chrono::milliseconds> (end_top-start_top).count();
+    // auto end_top = chrono::steady_clock::now();
+    // long duration_top = chrono::duration_cast<chrono::milliseconds> (end_top-start_top).count();
     // cout << "(" << duration_top << "ms" << ")" << endl;
     // cout << "levels size: " << levels.size() << endl;
 

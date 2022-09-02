@@ -4,11 +4,14 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <map>
 #include <chrono>
 #include <algorithm>
 #include <limits>
 #include <cstddef>
 #include <bitset>
+#include <bits/stdc++.h>
+#include <cctype>
 #include <metis.h>
 
 // #include <boost/serialization/string.hpp>
@@ -116,14 +119,15 @@ using namespace std;
 
 int main(int argc, char const *argv[])
 {
-    std::string v_path, vcdFilePath, instr_out; /*database_path, saif_out, dumpon_time_str, dumpoff_time_str*/
+    std::string v_path, vcdFilePath, instr_out, out_dir; /*database_path, saif_out, dumpon_time_str, dumpoff_time_str*/
     // int dumpon_time, dumpoff_time;
-    if (argc == 4)
+    if (argc == 5)
     {
         // database_path = argv[1];
         v_path = argv[1];
         vcdFilePath = argv[2]; 
         instr_out = argv[3];
+        out_dir = argv[4];
         // dumpon_time_str = argv[3];
         // dumpoff_time_str = argv[4];
         // saif_out = argv[5];
@@ -134,6 +138,8 @@ int main(int argc, char const *argv[])
         cout << "[USAGE] ./compile v_path vcd_path [instr_path]" << endl;
         exit(-1);
     }
+
+    auto start_total = std::chrono::steady_clock::now();
 
     inter _inter;
     _inter.preprocess(v_path);
@@ -216,6 +222,7 @@ int main(int argc, char const *argv[])
     map<string, int> net_from_id = _inter._parser.net_from_id;
     std::map<std::string, std::string> assign_pairs = _inter._parser.get_assign_pairs();
     std::map<std::string, TimedValues *> pinbitValues = _inter._parser.get_pinbitValues();
+    map<string, string> pin_bits = _inter._parser.get_pin_bits();
 
     // partition param
     idx_t nVertices = _parser.luts.size();
@@ -264,15 +271,15 @@ int main(int argc, char const *argv[])
     // }
     // cout << endl;
 
-    vector<idx_t> part = part(xadj, adjncy, /*adjwgt, */ METIS_PartGraphRecursive);
+    vector<idx_t> part = part_func(xadj, adjncy, /*adjwgt, */ METIS_PartGraphRecursive);
     // vector<idx_t> part = func(xadj, adjncy, adjwgt, METIS_PartGraphKway);
 
-    ofstream outpartition("../test/partition.txt");
-    for (int i = 0; i < part.size(); i++)
-    {
-        outpartition << i << " " << part[i] << endl;
-    }
-    outpartition.close();
+    // ofstream outpartition(par_out_path);
+    // for (int i = 0; i < part.size(); i++)
+    // {
+    //     outpartition << i << " " << part[i] << endl;
+    // }
+    // outpartition.close();
 
     auto end_par = std::chrono::steady_clock::now();
     long duration_par = std::chrono::duration_cast<std::chrono::milliseconds>(end_par - start_par).count();
@@ -281,15 +288,38 @@ int main(int argc, char const *argv[])
 
 
 
+   /******************************* vcd parsing *******************************/
+    cout << "4. Executing vcd file parsing." << endl;
+    auto start_vcd = std::chrono::steady_clock::now();
+    VCDParser _vcdparser;               // = new VCDParser();
+    _vcdparser.parse(vcdFilePath);      //, initial_net_map))
+    auto end_vcd = std::chrono::steady_clock::now();
+    long duration_vcd = std::chrono::duration_cast<std::chrono::milliseconds>(end_vcd - start_vcd).count();
+    cout << "Successfully finished vcd file parsing. (" << duration_vcd << "ms)" << endl;
+    cout << endl;
+   
+
+
     /**************************** pre processing ******************************/
-    cout << "4. Executing pre-processing." << endl;
+    cout << "5. Executing pre-processing." << endl;
     auto start_pre = std::chrono::steady_clock::now();
 
     int parts = (_parser.luts.size() + N_PROCESSORS_PER_CLUSTER - 1) / N_PROCESSORS_PER_CLUSTER;    // part nums
     map<int, vector<int>> luts_in_part;     // partition : luts
-    for (int i = 0; i < parts; i++) {
-        for (int j = 0; j < part.size(); j++) {
-            if (part[j] == i) {
+    if (parts == 1 && part[0] == 1) 
+    {   
+        for (int i = 0; i < part.size(); i++)
+        {
+            // luts_in_part[0].push_back(i);
+            part[i] -= 1;
+        }
+    }
+    for (int i = 0; i < parts; i++)
+    {
+        for (int j = 0; j < part.size(); j++)
+        {
+            if (part[j] == i)
+            {
                 luts_in_part[i].push_back(j);
             }
         }
@@ -311,9 +341,13 @@ int main(int argc, char const *argv[])
             int cur_level = lut_level[cur_luts[j]];
             cur_part_levels[cur_level].push_back(cur_luts[j]);
         }
-        for (int l = 0; l < cur_part_levels.size(); l++) {
+        for (int l = 0; l < cur_part_levels.size(); ) {
             if (cur_part_levels[l].empty()) {
                 cur_part_levels.erase(cur_part_levels.begin() + l);
+            }
+            else
+            {
+                l++;
             }
         } 
         parts_levels[i] = cur_part_levels;
@@ -451,6 +485,13 @@ int main(int argc, char const *argv[])
         }
     }
 
+    VCDTimeUnit time_unit = _vcdparser.time_units;
+    unsigned time_res = _vcdparser.time_resolution;
+    VCDScope *root = _vcdparser.root_scope;
+    string root_name = root->name;
+    std::unordered_map<std::string, std::vector<unsigned int> *> vcd_times = _vcdparser.times;
+    std::unordered_map<std::string, std::vector<short> *> vcd_values = _vcdparser.values;
+
     auto end_pre = std::chrono::steady_clock::now();
     long duration_pre = std::chrono::duration_cast<std::chrono::milliseconds>(end_pre - start_pre).count();
     cout << "Successfully finished pre-processing. (" << duration_pre << "ms)" << endl;
@@ -492,835 +533,484 @@ int main(int argc, char const *argv[])
      
 
 
-    /******************************* vcd parsing *******************************/
-    cout << "5. Executing vcd file parsing." << endl;
-    auto start_vcd = std::chrono::steady_clock::now();
-    VCDParser _vcdparser;               // = new VCDParser();
-    _vcdparser.parse(vcdFilePath);      //, initial_net_map))
-    auto end_vcd = std::chrono::steady_clock::now();
-    long duration_vcd = std::chrono::duration_cast<std::chrono::milliseconds>(end_vcd - start_vcd).count();
-    cout << "Successfully finished vcd file parsing. (" << duration_vcd << "ms)" << endl;
-    cout << endl;
-    
-
-
     /**************************** instruction generation *******************************/
+    // int cluster_num = 0;
+    // int processor_num = 0;
+    // for (int p = 0; p < parts; p++) {
+    //     vector<vector<int>> cur_part_levels = parts_levels[p];
+    //     vector<int> cur_luts = luts_in_part[p];
+    //     for (int l = 0; l < cur_part_levels.size(); l++) {
+    //         vector<int> cur_level = cur_part_levels[l];
+    //         for (int i = 0; i < cur_level.size(); i++) {
+    //             int lut_num = cur_level[i];
+    //             LutType cur_lut = luts[lut_num];
+    //             cur_lut.node_addr = {cluster_num, processor_num};
+    //             string lut_instr;
+    //             vector<string> lut_instrs;
+    //             Processor cur_processor;
+    //             int in_num = 0;
+    //             int cal = 0;
+    //             string lut_input_select;
+    //             for (int in = 0; in < cur_lut.in_ports.size(); in++) {
+    //                 int in_net_from_id = cur_lut.in_net_from_id[in]; // in net from out net from luts; -1: in net from initial module; -2: in net from assign pin bit
+    //                 string in_net_from_info = cur_lut.in_net_from_info[in];
+    //                 int in_net_from_part = cur_lut.in_net_from_part[in]; // -1: in net from initial module; -2: in net from assign pin bit; -3: current part; other: part num
+    //                 int in_net_from_level = cur_lut.in_net_from_level[in];
+    //                 int in_net_from_pos_at_level = cur_lut.in_net_from_pos_at_level[in];
+    //                 // in net from initial module
+    //                 if (in_net_from_id == -1) {
+    //                     // instr
+    //                     // cur_processor.instr_mem.push_back();
+    //                     // cur_processor.inter_mem.push_back();
+    //                     in_num += 1;
+    //                     lut_input_select.append("0");
+    //                 }
+    //                 // in net from assign pin bit
+    //                 else if (in_net_from_id == -2) {
+    //                     // instr
+    //                     // cur_processor.instr_mem.push_back();
+    //                     // cur_processor.inter_mem.push_back();
+    //                     in_num += 1;
+    //                     lut_input_select.append("0");
+    //                 }
+    //                 // in net from out net from luts
+    //                 else {
+    //                     if (in_net_from_part == -3) {
+    //                         if (in_num == (cur_lut.in_ports.size() - 1)) {
+    //                             Instr_1 instr_1;
+    //                             instr_1.LUT_Value = cur_lut.lut_res;
+    //                             instr_1.Node_Addr = luts[in_net_from_id].node_addr;
+    //                         }
+    //                         else {
+    //                             Instr_4 instr_4;
+    //                             instr_4.Node_Addr = luts[in_net_from_id].node_addr;
+    //                         }
+    //                     }
+    //                     // in net from lut of other part
+    //                     else {
+    //                     }
+    //                 }
+    //             }
+    //             processors[N_PROCESSORS_PER_CLUSTER * cluster_num + processor_num] = cur_processor;
+    //             if (processor_num == N_PROCESSORS_PER_CLUSTER || processor_num == cur_luts.size())
+    //             {
+    //                 cluster_num += 1;
+    //                 processor_num = 0;
+    //             }
+    //             else {
+    //                 processor_num += 1;
+    //             }
+    //         }
+    //     }
+    // }
+    cout << "6. Executing instruction generation." << endl;
+    auto start_ins = std::chrono::steady_clock::now();
+
     int cluster_num = 0;
     int processor_num = 0;
-    for (int p = 0; p < parts; p++) {
+    unsigned int current_time = 0;
+    for (int p = 0; p < parts; p++)
+    {
         vector<vector<int>> cur_part_levels = parts_levels[p];
         vector<int> cur_luts = luts_in_part[p];
-        for (int l = 0; l < cur_part_levels.size(); l++) {
+        for (int l = 0; l < cur_part_levels.size(); l++)
+        {
             vector<int> cur_level = cur_part_levels[l];
-            for (int i = 0; i < cur_level.size(); i++) {
-                int lut_num = cur_level[i];
+            for (int i = 0; i < cur_level.size(); i++)
+            {
+                int lut_num = cur_level[i];      
+                luts[lut_num].node_addr = {cluster_num, processor_num};
                 LutType cur_lut = luts[lut_num];
-                cur_lut.node_addr = {cluster_num, processor_num};
-                string lut_instr;
+                // string lut_instr;
                 vector<string> lut_instrs;
                 Processor cur_processor;
-                int in_num = 0;
-                int cal = 0;
-                string lut_input_select;
-                for (int in = 0; in < cur_lut.in_ports.size(); in++) {
-                    int in_net_from_id = cur_lut.in_net_from_id[in]; // in net from out net from luts; -1: in net from initial module; -2: in net from assign pin bit
-                    string in_net_from_info = cur_lut.in_net_from_info[in];
-                    int in_net_from_part = cur_lut.in_net_from_part[in]; // -1: in net from initial module; -2: in net from assign pin bit; -3: current part; other: part num
-                    int in_net_from_level = cur_lut.in_net_from_level[in];
-                    int in_net_from_pos_at_level = cur_lut.in_net_from_pos_at_level[in];
-                    // in net from initial module
-                    if (in_net_from_id == -1) {
-                        // instr
-                        // cur_processor.instr_mem.push_back();
-                        // cur_processor.inter_mem.push_back();
-                        in_num += 1;
-                        lut_input_select.append("0");
-                    }
-                    // in net from assign pin bit
-                    else if (in_net_from_id == -2) {
-                        // instr
-                        // cur_processor.instr_mem.push_back();
-                        // cur_processor.inter_mem.push_back();
-                        in_num += 1;
-                        lut_input_select.append("0");
-                    }
-                    // in net from out net from luts
-                    else {
-                        if (in_net_from_part == -3) {
-                            if (in_num == (cur_lut.in_ports.size() - 1)) {
-                                Instr_1 instr_1;
-                                instr_1.LUT_Value = cur_lut.lut_res;
-                                instr_1.Node_Addr = luts[in_net_from_id].node_addr;
+                // int in_num = 0;
+                // int cal = 0;
+                int initial_num = count(cur_lut.in_net_from_id.begin(), cur_lut.in_net_from_id.end(), -1) + count(cur_lut.in_net_from_id.begin(), cur_lut.in_net_from_id.end(), -2); // num of inputs from initial module or assign pin bit
+                // all input from initial module or assign pin bit
+                if (initial_num == cur_lut.in_ports.size()) 
+                {
+                    string Data_Mem_Select;
+                    Instr_1 instr_1;
+                    instr_1.LUT_Value = cur_lut.lut_res;
+                    instr_1.Node_Addr = cur_lut.node_addr;
+                    for (int in = 0; in < cur_lut.in_ports.size(); in++) 
+                    {
+                        if (cur_lut.in_net_from_id[in] == -1)   // -1: in net from initial module
+                        {     
+                            // Data_Mem_Select
+                            if (vcd_values.find(cur_lut.in_net_from_info[in]) != vcd_values.end())
+                            {
+                                vector<unsigned int> *tvs = vcd_times[cur_lut.in_net_from_info[in]];
+                                vector<short> *tvs_val = vcd_values[cur_lut.in_net_from_info[in]];
+                                vector<unsigned int>::iterator it = find(tvs->begin(), tvs->end(), current_time);
+                                auto id = distance(tvs->begin(), it);
+                                if (*(tvs_val->begin() + id) == 0)
+                                    Data_Mem_Select.append("0");
+                                else 
+                                    Data_Mem_Select.append("1");
                             }
-                            else {
-                                Instr_4 instr_4;
-                                instr_4.Node_Addr = luts[in_net_from_id].node_addr;
+                            else
+                            {
+                                cout << "ERROR: No initial info of signal " << cur_lut.in_net_from_info[in] << " in vcd file!" << endl;
                             }
-
                         }
-                        // in net from lut of other part
-                        else {
-
+                        else if (cur_lut.in_net_from_id[in] == -2)  // -2: in net from assign pin bit
+                        {    
+                            if (cur_lut.in_net_from_pos_at_level[in] == 0) 
+                                Data_Mem_Select.append("0");
+                            else 
+                                Data_Mem_Select.append("1");
                         }
                     }
-
+                    instr_1.Data_Mem_Select = Data_Mem_Select;
+                    instr_1.Operand_Addr = {MEM_DEPTH - 1, MEM_DEPTH - 1, MEM_DEPTH - 1, MEM_DEPTH - 1};
+                    string lut_instr = cat_instr_1(instr_1);
+                    lut_instrs.push_back(lut_instr);
+                    cur_processor.instr_mem = lut_instrs;
+                    luts[lut_num].res_pos_at_mem = 0;
                 }
+                // just one input from out net of other luts
+                else if (initial_num == cur_lut.in_ports.size() - 1) 
+                {
+                    string Data_Mem_Select;
+                    Instr_1 instr_1;
+                    Instr_4 instr_4;
+                    instr_1.LUT_Value = cur_lut.lut_res;
+                    instr_4.Node_Addr = cur_lut.node_addr;
+                    int instr_4_num;
+                    for (int in = 0; in < cur_lut.in_ports.size(); in++)
+                    {
+                        if (cur_lut.in_net_from_id[in] == -1)   // -1: in net from initial module
+                        {
+                            // Data_Mem_Select
+                            if (vcd_values.find(cur_lut.in_net_from_info[in]) != vcd_values.end())
+                            {
+                                vector<unsigned int> *tvs = vcd_times[cur_lut.in_net_from_info[in]];
+                                vector<short> *tvs_val = vcd_values[cur_lut.in_net_from_info[in]];
+                                vector<unsigned int>::iterator it = find(tvs->begin(), tvs->end(), current_time);
+                                auto id = distance(tvs->begin(), it);
+                                if (*(tvs_val->begin() + id) == 0)
+                                    Data_Mem_Select.append("0");
+                                else
+                                    Data_Mem_Select.append("1");
+                            }
+                            else
+                            {
+                                cout << "ERROR: No initial info of signal " << cur_lut.in_net_from_info[in] << " in vcd file!" << endl;
+                            }
+                            instr_1.Operand_Addr.push_back(MEM_DEPTH - 1);
+                        }
+                        else if (cur_lut.in_net_from_id[in] == -2)  // -2: in net from assign pin bit
+                        {
+                            if (cur_lut.in_net_from_pos_at_level[in] == 0)
+                                Data_Mem_Select.append("0");
+                            else
+                                Data_Mem_Select.append("1");
+                            instr_1.Operand_Addr.push_back(MEM_DEPTH - 1);
+                        }
+                        else    // in net from out net from luts
+                        {        
+                            if (cur_lut.in_net_from_part[in] == -3)     // current part
+                            {
+                                LutType cur_in_from_lut = luts[cur_lut.in_net_from_id[in]];
+                                instr_1.Node_Addr = cur_in_from_lut.node_addr;
+                                int processors_id = N_PROCESSORS_PER_CLUSTER * cur_in_from_lut.node_addr[0] + cur_in_from_lut.node_addr[1];
+                                Processor cur_in_from_pro = processors[processors_id];
+                                if (cur_in_from_pro.instr_mem.size() == 1)
+                                {
+                                    instr_4_num = 1; 
+                                    instr_1.Operand_Addr.push_back(1); 
+                                    Instr_2 instr_2;
+                                    instr_2.Node_Addr = cur_in_from_lut.node_addr;
+                                    instr_2.Data_Mem_Select = "0";
+                                    instr_2.Operand_Addr = cur_in_from_lut.res_pos_at_mem;
+                                    string lut_instr_2 = cat_instr_2(instr_2);
+                                    processors[processors_id].instr_mem.push_back(lut_instr_2);
+                                    luts[lut_num].res_pos_at_mem = cur_in_from_pro.instr_mem.size();
+                                }
+                                else if (cur_in_from_pro.instr_mem.size() > 1)
+                                {
+                                    instr_4_num = cur_in_from_pro.instr_mem.size();
+                                    instr_1.Operand_Addr.push_back(cur_in_from_pro.instr_mem.size());
+                                    Instr_2 instr_2;
+                                    instr_2.Node_Addr = cur_in_from_lut.node_addr;
+                                    instr_2.Data_Mem_Select = "0";
+                                    instr_2.Operand_Addr = cur_in_from_lut.res_pos_at_mem;
+                                    string lut_instr_2 = cat_instr_2(instr_2);
+                                    processors[processors_id].instr_mem.push_back(lut_instr_2);
+                                    luts[lut_num].res_pos_at_mem = cur_in_from_pro.instr_mem.size();
+                                }
+                            }
+                            else    // other part
+                            {
+                                // LutType cur_in_from_lut = luts[cur_lut.in_net_from_id];
+                                // instr_1.Node_Addr = cur_in_from_lut.node_addr;
+                                // Processor cur_in_from_pro = processors[N_PROCESSORS_PER_CLUSTER * cur_in_from_lut.node_addr[0] + cur_in_from_lut.node_addr[1]];
+                                // if (cur_in_from_pro.instr_mem.size() == 1)
+                                // {
+                                //     instr_4_num = 1;
+                                //     instr_1.Operand_Addr.push_back(1);
+                                //     Instr_2 instr_2;
+                                //     instr_2.Node_Addr = cur_in_from_lut.node_addr;
+                                //     instr_2.Data_Mem_Select = "0";
+                                //     instr_2.Operand_Addr = 0;
+                                //     string lut_instr_2 = cat_instr_2(instr_2);
+                                //     cur_in_from_pro.instr_mem.push_back(lut_instr_2);
+                                // }
+                                // else if (cur_in_from_pro.instr_mem.size() > 1)
+                                // {
+                                //     instr_4_num = cur_in_from_pro.instr_mem.size();
+                                //     instr_1.Operand_Addr.push_back(cur_in_from_pro.instr_mem.size());
+                                //     Instr_2 instr_2;
+                                //     instr_2.Node_Addr = cur_in_from_lut.node_addr;
+                                //     instr_2.Data_Mem_Select = "0";
+                                //     instr_2.Operand_Addr = cur_in_from_pro.instr_mem.size() - 1;
+                                //     string lut_instr_2 = cat_instr_2(instr_2);
+                                //     cur_in_from_pro.instr_mem.push_back(lut_instr_2);
+                                // }
+                            }
+                            Data_Mem_Select.append("1");
+                        }
+                    }
+                    instr_1.Data_Mem_Select = Data_Mem_Select;
+                    string lut_instr_1 = cat_instr_1(instr_1);
+                    string lut_instr_4 = cat_instr_4(instr_4);
+                    lut_instrs.insert(lut_instrs.begin(), instr_4_num, lut_instr_4);
+                    lut_instrs.push_back(lut_instr_1);
+                    cur_processor.instr_mem = lut_instrs;
+                }
+                // mul inputs from out net of other luts
+                else 
+                {
+                    Instr_1 instr_1;
+                    instr_1.LUT_Value = cur_lut.lut_res;
+                    vector<int> cur_in_net_from_id = cur_lut.in_net_from_id;
+                    vector<int> cur_in_net_from_part = cur_lut.in_net_from_part;
+                    map<int, int> from_id_opr_addr; // <in_from_id, operand_addr>
+                    for (vector<int>::iterator it = cur_in_net_from_id.begin(); it != cur_in_net_from_id.end(); )
+                    {
+                        if (*it == -1 || *it == -2)
+                        {
+                            it = cur_in_net_from_id.erase(it);
+                        }
+                        else
+                        {
+                            it++;
+                        }
+                    }
+                    for (vector<int>::iterator it = cur_in_net_from_part.begin(); it != cur_in_net_from_part.end(); )
+                    {
+                        if (*it == -1 || *it == -2)
+                        {
+                            it = cur_in_net_from_part.erase(it);
+                        }
+                        else
+                        {
+                            it++;
+                        }
+                    }
+
+                    if (count(cur_in_net_from_part.begin(), cur_in_net_from_part.end(), -3) == cur_in_net_from_part.size()) // all from current part
+                    {
+                        vector<pair<int, int>> id_instr; // <cur_in_net_from_id, pro_instr_num>
+                        vector<int> _cur_in_net_from_id;
+                        vector<int> pro_instr_num;
+                        vector<int> instr_start_pos;
+                        for (int in = 0; in < cur_in_net_from_id.size(); in++)
+                        {
+                            LutType cur_in_from_lut = luts[cur_in_net_from_id[in]];
+                            int processors_id = N_PROCESSORS_PER_CLUSTER * cur_in_from_lut.node_addr[0] + cur_in_from_lut.node_addr[1];
+                            Processor cur_in_from_pro = processors[processors_id];
+                            // pro_instr_num.push_back(cur_in_from_pro.instr_mem.size());
+                            id_instr.push_back(pair<int, int>(cur_in_net_from_id[in], cur_in_from_pro.instr_mem.size()));
+                        }
+                        sort(id_instr.begin(), id_instr.end(), cmp);
+                        for (vector<pair<int, int>>::iterator it = id_instr.begin(); it != id_instr.end(); it++)
+                        {
+                            _cur_in_net_from_id.push_back(it->first);
+                            pro_instr_num.push_back(it->second);
+                            instr_start_pos.push_back(it->second + 1);
+                        }
+                        for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
+                        {
+                            if (*it == *(it - 1))
+                            {
+                                *it += 1;
+                            }
+                            else if (*it < *(it - 1))
+                            {
+                                *it += (*(it - 1) - *it + 1);
+                            }
+                        }
+                        for (int i = 0; i < _cur_in_net_from_id.size(); i++)
+                        {
+                            from_id_opr_addr.insert(pair<int, int>(_cur_in_net_from_id[i], instr_start_pos[i]));
+                        }
+                        for (int i = 0; i < _cur_in_net_from_id.size(); i++)
+                        {
+                            int cur_id = _cur_in_net_from_id[i];
+                            int cur_num = pro_instr_num[i];
+                            int cur_pos = instr_start_pos[i];
+                            int cur_lut_idle_num = cur_pos;
+                            int from_lut_idle_num = cur_pos - cur_num - 1;
+                            LutType cur_in_from_lut = luts[cur_id];
+                            int processors_id = N_PROCESSORS_PER_CLUSTER * cur_in_from_lut.node_addr[0] + cur_in_from_lut.node_addr[1];
+                            Processor cur_in_from_pro = processors[processors_id];
+                            if (i == _cur_in_net_from_id.size() - 1)
+                            {
+                                // current lut
+                                Instr_4 instr_4;
+                                instr_4.Node_Addr = cur_in_from_lut.node_addr;
+                                string lut_instr_4 = cat_instr_4(instr_4);
+                                lut_instrs.insert(lut_instrs.end(), cur_lut_idle_num - lut_instrs.size() - 1, lut_instr_4);
+                                instr_1.Node_Addr = cur_in_from_lut.node_addr;
+                                // cur_processor.instr_mem = lut_instrs;
+                                // in from lut
+                                Instr_2 instr_2;
+                                instr_2.Node_Addr = cur_in_from_lut.node_addr;
+                                instr_2.Data_Mem_Select = "0";
+                                instr_2.Operand_Addr = cur_in_from_lut.res_pos_at_mem;
+                                string lut_instr_2 = cat_instr_2(instr_2);
+                                processors[processors_id].instr_mem.insert(processors[processors_id].instr_mem.end(), from_lut_idle_num, lut_instr_4);
+                                processors[processors_id].instr_mem.push_back(lut_instr_2);
+                            }
+                            else
+                            {
+                                // current lut
+                                Instr_4 instr_4;
+                                instr_4.Node_Addr = cur_in_from_lut.node_addr;
+                                string lut_instr_4 = cat_instr_4(instr_4);
+                                lut_instrs.insert(lut_instrs.end(), cur_lut_idle_num - lut_instrs.size(), lut_instr_4);
+                                // cur_processor.instr_mem = lut_instrs;
+                                // in from lut
+                                Instr_2 instr_2;
+                                instr_2.Node_Addr = cur_in_from_lut.node_addr;
+                                instr_2.Data_Mem_Select = "0";
+                                instr_2.Operand_Addr = cur_in_from_lut.res_pos_at_mem;
+                                string lut_instr_2 = cat_instr_2(instr_2);
+                                processors[processors_id].instr_mem.insert(processors[processors_id].instr_mem.end(), from_lut_idle_num, lut_instr_4);
+                                processors[processors_id].instr_mem.push_back(lut_instr_2);
+                            }
+                        }
+                    }
+                    else // some from other parts
+                    {
+
+                    }
+
+                    // Data_Mem_Select && Operand_Addr
+                    for (int in = 0; in < cur_lut.in_ports.size(); in++)
+                    {
+                        if (cur_lut.in_net_from_id[in] == -1) // -1: in net from initial module
+                        {
+                            // Data_Mem_Select
+                            if (vcd_values.find(cur_lut.in_net_from_info[in]) != vcd_values.end())
+                            {
+                                vector<unsigned int> *tvs = vcd_times[cur_lut.in_net_from_info[in]];
+                                vector<short> *tvs_val = vcd_values[cur_lut.in_net_from_info[in]];
+                                vector<unsigned int>::iterator it = find(tvs->begin(), tvs->end(), current_time);
+                                auto id = distance(tvs->begin(), it);
+                                if (*(tvs_val->begin() + id) == 0)
+                                    instr_1.Data_Mem_Select.append("0");
+                                else
+                                    instr_1.Data_Mem_Select.append("1");
+                            }
+                            else
+                            {
+                                cout << "ERROR: No initial info of signal " << cur_lut.in_net_from_info[in] << " in vcd file!" << endl;
+                            }
+                            instr_1.Operand_Addr.push_back(MEM_DEPTH - 1);
+                        }
+                        else if (cur_lut.in_net_from_id[in] == -2) // -2: in net from assign pin bit
+                        {
+                            if (cur_lut.in_net_from_pos_at_level[in] == 0)
+                                instr_1.Data_Mem_Select.append("0");
+                            else
+                                instr_1.Data_Mem_Select.append("1");
+                            instr_1.Operand_Addr.push_back(MEM_DEPTH - 1);
+                        }
+                        else // in net from out net from luts
+                        {
+                            instr_1.Data_Mem_Select.append("1");
+                            map<int, int>::iterator it;
+                            it = from_id_opr_addr.find(cur_lut.in_net_from_id[in]);
+                            instr_1.Operand_Addr.push_back(it->second - 1);
+                        }
+                    }
+                    string lut_instr_1 = cat_instr_1(instr_1);
+                    lut_instrs.push_back(lut_instr_1);
+                    cur_processor.instr_mem = lut_instrs;
+                    luts[lut_num].res_pos_at_mem = lut_instrs.size() - 1;
+                }
+                
                 processors[N_PROCESSORS_PER_CLUSTER * cluster_num + processor_num] = cur_processor;
-                if (processor_num == N_PROCESSORS_PER_CLUSTER || processor_num == cur_luts.size())
+                if (processor_num == N_PROCESSORS_PER_CLUSTER || processor_num == cur_luts.size() - 1)
                 {
                     cluster_num += 1;
                     processor_num = 0;
                 }
-                else {
+                else
+                {
                     processor_num += 1;
                 }
             }
         }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        // int tmpp = -1;
-        // long duration_pro0 = 0;     // process input timedvalue per level
-        // long duration_pro1 = 0;     // process input merging
-        // long duration_pre = 0;      // duration_pro0 + duration_pro1
-        // long duration_gpu = 0; 
-        // long duration_cuda = 0;
-        // long duration_cuda2 = 0;
-        // long duration_out = 0;
-        // long duration_out2 = 0;
-        // long duration_data = 0;
-        
-        // vcd signals
-        // std::vector<VCDSignal*> signals = parser.get_signals();
-        // std::vector<VCDTime>    times = parser.get_timestamps();
-        VCDTimeUnit time_unit = _vcdparser.time_units;
-        unsigned time_res = _vcdparser.time_resolution;
-        VCDScope *root = _vcdparser.root_scope;
-        string root_name = root->name;
-
-        // std::unordered_map<std::string, TimedValues*> val_map = parser.get_val_map();
-        // std::vector<std::vector<unsigned int> > times = parser->times;
-        // std::vector<std::vector<short> > values = parser->values;
-        // std::unordered_map<std::string, std::vector<unsigned int>* > times = parser.times;
-        // std::unordered_map<std::string, std::vector<short>* > values = parser.values;
-
-        // delete parser;
-
-        
-
-
-
-
-
-
-
-
-
-
-
-        /** Simulate **/
-        // cout << "start simulator..." << endl;
-        // auto start = std::chrono::steady_clock::now();
-        
-        // std::unordered_map<std::string, std::vector<unsigned int>* > out_times;
-        // std::unordered_map<std::string, std::vector<short>* > out_values;
-        // for (unsigned i = 0; i < _inter.levels.size(); ++i)
-        // {
-        //     cout << "level " << i << endl;
-        //     const int _cur_level = i;
-        //     std::vector<int> cur_level = (_inter.levels)[i];
-        //     const int lut_num = cur_level.size();
-            
-        //     int blocks_per_lut = 1;
-        //     int n_blocks = lut_num;
-
-        //     int height = lut_num;   // lut num of current level
-        //     //data to processor
-        //     int _time_unit = time_unit;
-        //     //int *dev_time_unit;
-
-        //     //int *host_out_data;
-            
-        //     //size_t pitch_out;
-        //     int out_width = 0;
-        //     int out_width2 = 0;
-
-        //     //short *host_in_data;
-           
-        //     //int *dev_in_data;  // 2D
-        //     //size_t pitch_data;
-        //     int data_width = 0;
-        //     //int _data_width=0;
-        //     int process_data_width = 0;
-
-        //     //int *host_data_val_num;
-            
-        //     //size_t pitch_val_num;
-        //     unsigned int val_num_width=0;
-
-            
-        //     //size_t pitch_function;
-        //     int functions_width=0;
-
-        //     //unsigned long long *host_times;
-        //     unsigned int times_width=0;
-        //     //unsigned long long *dev_in_times;
-        //     //unsigned long long *dev_times;
-        //     //unsigned long long *dev_out_times;
-        //     //size_t pitch_times;
-        //     //size_t pitch_out_times;
-    
-        //     // int delay_width=0;
-
-        //     // some flag
-        //     short *data_in_num = (short *)malloc(sizeof(short) * height);   // inports num of each lut in current level
-        //     short *data_out_num = (short *)malloc(sizeof(short) * height);  // outports num of each lut in current level
-
-        //     unsigned int _end = stoull(dumpoff_time_str);
-        //     short *input_datas = (short *)malloc(sizeof(short) * _end * 4);
-        //     // cout << lut_num << endl;
-
-        //     unsigned int input_datas_size = 0;
-        //     unsigned int *total_input_times = (unsigned int *)malloc(sizeof(unsigned int) * (_end * 2)); // inst_num*N_PROCESSORS_PER_CLUSTER*N_INS_PER_PROCESSOR*2);
-        //     unsigned int total_input_times_size = 0;
-        //     std::vector<unsigned int> total_times_sizes(lut_num);   // num of timestamps of each lut
-        //     std::vector<unsigned int> total_times_start(lut_num);   // start time of each lut
-
-        //     unsigned int *input_start = (unsigned int *)malloc(sizeof(unsigned int) * lut_num);
-        //     unsigned int *output_start = (unsigned int *)malloc(sizeof(unsigned int) * lut_num);
-        //     unsigned int *output_size = (unsigned int *)malloc(sizeof(unsigned int) * lut_num);
-        //     unsigned int *output_start2 = (unsigned int *)malloc(sizeof(unsigned int) * lut_num);
-        //     unsigned int *output_size2 = (unsigned int *)malloc(sizeof(unsigned int) * lut_num);
-        //     if (output_size == NULL)
-        //     {
-        //         cout << "error: memory full!" << endl;
-        //         exit(-1);
-        //     }
-
-
-        //     auto start_pro = std::chrono::steady_clock::now();
-        //     unsigned int max_out = 0;
-        //     unsigned int times_start = 0;
-        //     for (int j = 0; j < lut_num; ++j)
-        //     {
-        //         LutType *cur_lut = _inter._parser.luts.find(cur_level[j]); 
-        //         std::vector<string> cur_in = cur_lut->in_ports;
-        //         data_in_num[j] = cur_in.size();
-        //         std::vector<string> cur_out = cur_lut->out_ports;
-        //         data_out_num[j] = cur_out.size();
-        //         // std::map<std::string, TimedValues> bitValues;
-        //         // std::vector<TimedValues> tvs_vec(cur_in.size());
-        //         // std::vector<VCDBit> last_vec(cur_in.size());
-        //         std::vector<unsigned int> tvs_size(cur_in.size());
-        //         // std::vector<int> tvs_flag(cur_in.size());
-        //         // std::vector<int> _tvs_flag(cur_in.size());
-        //         // int tmp_times_size = 0;
-
-        //         // std::vector<TimedValues*> tvs(cur_in.size());
-        //         std::vector<std::vector<unsigned int> *> tvs(cur_in.size());
-        //         std::vector<std::vector<short> *> tvs_val(cur_in.size());
-        //         unsigned int sum = 0;   // sum of timestamps per lut
-        //         // auto start_pro0 = std::chrono::steady_clock::now();
-        //         for (unsigned it = 0; it < cur_in.size(); it++)
-        //         {
-        //             string in_name = cur_in[it];
-        //             // cout << "name:" << in_name << endl;
-        //             //  = bitValues[cur_in[it]];
-        //             if ((_vcdparser.times).find(in_name) != (_vcdparser.times).end())
-        //             {
-        //                 // TimedValues cur_tv_deq;
-        //                 tvs[it] = (_vcdparser.times)[in_name];
-        //                 tvs_val[it] = (_vcdparser.values)[in_name];
-        //                 // bitValues[in_name] = cur_tv_deq;
-        //             }
-        //             else if (out_values.find(in_name) != out_values.end())
-        //             {
-        //                 tvs[it] = out_times[in_name];
-        //                 tvs_val[it] = out_values[in_name];
-        //             }
-        //             else if (pinbitValues.find(in_name) != pinbitValues.end())
-        //             {
-        //                 // tvs[it] = pinbitValues[in_name];
-        //                 std::vector<unsigned int> *_tvs = new std::vector<unsigned int>();
-        //                 std::vector<short> *_tvs_val = new std::vector<short>();
-        //                 _tvs->push_back(0);
-        //                 TimedValues *te = pinbitValues[in_name];
-        //                 TimedValue tev = *(te->begin());
-        //                 _tvs_val->push_back(tev.value);
-        //                 tvs[it] = _tvs;
-        //                 tvs_val[it] = _tvs_val;
-        //             }
-        //             else if (assign_pairs.find(in_name) != assign_pairs.end())
-        //             {
-        //                 string temp = assign_pairs[in_name];
-        //                 if ((_vcdparser.times).find(temp) != (_vcdparser.times).end())
-        //                 {
-        //                     // tvs[it] = val_map[temp];
-        //                     tvs[it] = (_vcdparser.times)[temp];
-        //                     tvs_val[it] = (_vcdparser.values)[temp];
-        //                     // bitValues[in_name] = cur_tv_deq;
-        //                 }
-        //                 else if (out_values.find(temp) != out_values.end())
-        //                 {
-        //                     tvs[it] = out_times[temp];
-        //                     tvs_val[it] = out_values[temp];
-        //                 }
-        //                 else if (pinbitValues.find(temp) != pinbitValues.end())
-        //                 {
-        //                     std::vector<unsigned int> *_tvs = new std::vector<unsigned int>();
-        //                     std::vector<short> *_tvs_val = new std::vector<short>();
-        //                     _tvs->push_back(0);
-        //                     TimedValues *te = pinbitValues[temp];
-        //                     TimedValue tev = *(te->begin());
-        //                     _tvs_val->push_back(tev.value);
-        //                     tvs[it] = _tvs;
-        //                     tvs_val[it] = _tvs_val;
-        //                 }
-        //             }
-        //             else
-        //             {
-        //                 cout << "error." << endl;
-        //                 exit(-1);
-        //             }
-
-        //             // another method
-        //             // tvs_vec[it] = tvs[it];
-        //             // last_vec[it] = VCD_X;
-        //             unsigned int step = tvs[it]->size();
-        //             tvs_size[it] = step;
-        //             sum += step;
-        //             // tmp_times_size += tvs_size[it];
-        //             // tvs_flag[it] = 0;
-        //             //_tvs_flag[it] = 0;
-        //         }
-        //         // auto end_pro0 = std::chrono::steady_clock::now();
-        //         // duration_pro0 += std::chrono::duration_cast<std::chrono::milliseconds>(end_pro0 - start_pro0).count();
-
-
-        //         // auto start_pro1 = std::chrono::steady_clock::now();
-        //         unsigned int tmp_size = tvs_size[0];
-        //         if (data_in_num[j] == 1)
-        //         {
-        //             unsigned _size = tvs_size[0];
-        //             auto pos = tvs[0]->begin();
-        //             auto pos_val = tvs_val[0]->begin();
-        //             for (unsigned it = 0; it < _size; ++it)
-        //             {
-        //                 total_input_times[times_start + it] = *(pos + it);
-        //                 input_datas[data_width + it] = *(pos_val + it);
-        //             }
-        //         }
-        //         else if (data_in_num[j] % 2 == 0)
-        //         {
-        //             unsigned _size = data_in_num[j];
-        //             unsigned sorted_num = _size / 2;
-        //             std::vector<unsigned int> s(sorted_num);
-        //             unsigned int shift = 0;
-        //             unsigned int val_shift = 0;
-        //             for (unsigned it = 0; it < sorted_num; it++)
-        //             {
-        //                 unsigned end1 = tvs_size[it * 2];
-        //                 unsigned end2 = tvs_size[it * 2 + 1];
-        //                 unsigned start = times_start + shift;        //(it == 0 ? 0 : s[it-1]);
-        //                 unsigned val_start = data_width + val_shift; //(it == 0 ? 0 : (s[it-1]*2));
-        //                 unsigned int *list1 = &(*(tvs[it * 2]->begin()));
-        //                 unsigned int *list2 = &(*(tvs[it * 2 + 1]->begin()));
-        //                 short *val_list1 = &(*(tvs_val[it * 2]->begin()));
-        //                 short *val_list2 = &(*(tvs_val[it * 2 + 1]->begin()));
-        //                 merge2(total_input_times, start, tmp_size,
-        //                        input_datas, val_start, // val_tmp_size,
-        //                        // tvs[it*2],tvs_val[it*2], end1, tvs[it*2+1],tvs_val[it*2+1], end2);
-        //                        list1, val_list1, end1, list2, val_list2, end2);
-        //                 s[it] = tmp_size;
-        //                 shift += tmp_size;
-        //                 val_shift = shift * (it + 1) * 2;
-        //             }
-        //             tmp_size = s[0];
-        //             unsigned val_tmp_size = s[0] * 2;
-        //             shift = s[0];
-        //             val_shift = s[0] * 2;
-        //             for (unsigned it = 1; it < sorted_num; it++)
-        //             {
-        //                 unsigned id = 2 * it;
-        //                 unsigned start2 = times_start + shift;
-        //                 unsigned val_start2 = data_width + val_shift;
-        //                 unsigned end1 = times_start + tmp_size;
-        //                 unsigned val_end1 = data_width + val_tmp_size;
-        //                 shift += s[it];
-        //                 val_shift = shift * (it + 1) * 2;
-        //                 unsigned end2 = times_start + shift;
-        //                 unsigned val_end2 = val_start2 + 2 * s[it];
-        //                 merge_ptr(total_input_times, times_start, start2, end1, end2, tmp_size,
-        //                           input_datas, data_width, val_start2, val_end1, val_end2, val_tmp_size,
-        //                           id);
-        //             }
-        //         }
-        //         else
-        //         {
-        //             unsigned _size = data_in_num[j];
-        //             unsigned sorted_num = _size / 2;
-        //             std::vector<unsigned int> s(sorted_num);
-        //             unsigned int shift = 0;
-        //             unsigned int val_shift = 0;
-        //             for (unsigned it = 0; it < sorted_num; it++)
-        //             {
-        //                 unsigned end1 = tvs_size[it * 2];
-        //                 unsigned end2 = tvs_size[it * 2 + 1];
-        //                 unsigned start = times_start + shift;        //(it == 0 ? 0 : s[it-1]);
-        //                 unsigned val_start = data_width + val_shift; //(it == 0 ? 0 : (s[it-1]*2));
-        //                 unsigned int *list1 = &(*(tvs[it * 2]->begin()));
-        //                 unsigned int *list2 = &(*(tvs[it * 2 + 1]->begin()));
-        //                 short *val_list1 = &(*(tvs_val[it * 2]->begin()));
-        //                 short *val_list2 = &(*(tvs_val[it * 2 + 1]->begin()));
-        //                 merge2(total_input_times, start, tmp_size,
-        //                        input_datas, val_start, // val_tmp_size,
-        //                        // tvs[it*2],tvs_val[it*2], end1, tvs[it*2+1],tvs_val[it*2+1], end2);
-        //                        list1, val_list1, end1, list2, val_list2, end2);
-        //                 s[it] = tmp_size;
-        //                 shift += tmp_size;
-        //                 val_shift = shift * (it + 1) * 2;
-        //             }
-        //             tmp_size = s[0];
-        //             unsigned val_tmp_size = s[0] * 2;
-        //             shift = s[0];
-        //             val_shift = s[0] * 2;
-        //             unsigned id = 2;
-        //             unsigned it;
-        //             for (it = 1; it < sorted_num; it++)
-        //             {
-        //                 id = 2 * it;
-        //                 unsigned start2 = times_start + shift;
-        //                 unsigned val_start2 = data_width + val_shift;
-        //                 unsigned end1 = times_start + tmp_size;
-        //                 unsigned val_end1 = data_width + val_tmp_size;
-        //                 shift += s[it];
-        //                 val_shift = shift * (it + 1) * 2;
-        //                 unsigned end2 = times_start + shift;
-        //                 unsigned val_end2 = val_start2 + 2 * s[it];
-        //                 merge_ptr(total_input_times, times_start, start2, end1, end2, tmp_size,
-        //                           input_datas, data_width, val_start2, val_end1, val_end2, val_tmp_size,
-        //                           id);
-        //             }
-        //             id = 2 * it;
-        //             unsigned int *list1 = &(*(tvs[_size - 1]->begin()));
-        //             short *val_list1 = &(*(tvs_val[_size - 1]->begin()));
-        //             merge(total_input_times, times_start, tmp_size,
-        //                   input_datas, data_width, val_tmp_size, id,
-        //                   // tvs[it], tvs_val[it], tvs_size[it]);
-        //                   list1, val_list1, tvs_size[_size - 1]);
-        //         }
-        //         // auto end_pro1 = std::chrono::steady_clock::now();
-        //         // duration_pro1 += std::chrono::duration_cast<std::chrono::milliseconds>(end_pro1 - start_pro1).count();
-
-        //         total_times_sizes[j] = tmp_size;
-        //         total_times_start[j] = times_start;
-        //         input_start[j] = data_width;
-        //         times_start += tmp_size;
-
-        //         int _blocks_per_lut = (tmp_size + N_PROCESSORS_PER_CLUSTER * N_INS_PER_PROCESSOR - 1) / (N_PROCESSORS_PER_CLUSTER * N_INS_PER_PROCESSOR);
-        //         if (_blocks_per_lut * lut_num > MAX_CLUSTERS)
-        //         {
-        //             _blocks_per_lut = MAX_CLUSTERS / lut_num;
-        //         }
-        //         blocks_per_lut = max(blocks_per_lut, _blocks_per_lut);
-
-        //         data_width += tmp_size * data_in_num[j];
-        //     }
-        //     n_blocks = lut_num * blocks_per_lut;
-        //     cout << "blocks_per_lut: " << blocks_per_lut << endl;
-        //     cout << "data_width size: " << data_width << endl;
-        //     // cout << "max_out size: " << max_out << endl;
-        //     // out_width = total_input_times->size() * max_out;
-        //     auto end_pro = std::chrono::steady_clock::now();
-        //     long duration_pro = std::chrono::duration_cast<std::chrono::milliseconds>(end_pro - start_pro).count();
-        //     cout << "total time of proccess: " << duration_pro << "ms" << endl;
-        //     duration_pre += duration_pro;
-
-
-        //     unsigned int *dev_in_times;
-        //     auto start_data = std::chrono::steady_clock::now();
-        //     unsigned int *dev_times;
-        //     total_input_times_size = times_start;
-
-            
-        //     short *out_data = (short *)malloc(sizeof(short) * out_width);
-        //     unsigned int *out_time = (unsigned int *)malloc(sizeof(unsigned int) * out_width);
-        //     short *out_splited_width = (short *)malloc(sizeof(short) * height);
-        //     for (int j = 0; j < cur_level.size(); ++j)
-        //     {
-        //         // string _name = (_inter.p.get_instance_names())[cur_level[j]];
-        //         Instance *cur_inst = _inter.find_inst(cur_level[j]);
-        //         //&((_inter.p.get_instances())[_name]);
-        //         std::vector<string> cur_out = cur_inst->out_net;
-        //         unsigned int out_num = cur_out.size();
-        //         unsigned int cur_width = out_splited_width[j];
-        //         // cout << "out_splited_width: " << cur_width << endl;
-        //         for (int k = 0; k < out_num; ++k)
-        //         {
-        //             string cur_out_name = cur_out[k];
-        //             std::vector<unsigned int> *tvs = new std::vector<unsigned int>();
-        //             std::vector<short> *tvs_val = new std::vector<short>();
-        //             tvs->push_back(0);
-        //             tvs_val->push_back(VCD_X);
-        //             // out_times[cur_out_name].push_back(0);
-        //             // out_datas[cur_out_name].push_back(2);
-        //             // int out_start = j*out_width+k*(out_width/out_num);
-        //             unsigned int out_start = output_start[j] + output_size[j] * k;
-        //             // for (int l = out_start; l < out_start + out_width/out_num; ++l)
-        //             unsigned int last_out_time = 0;
-        //             short last_out_data = VCD_X;
-        //             for (int m = 0; m < N_PROCESSORS_PER_CLUSTER * blocks_per_inst; ++m)
-        //             {
-        //                 int l;
-        //                 for (l = out_start + m * cur_width; l < out_start + (m + 1) * cur_width; ++l)
-        //                 {
-        //                     if (l >= out_start + output_size[j])
-        //                     {
-        //                         break;
-        //                     }
-        //                     if (l == out_start + m * cur_width && m != 0)
-        //                     {
-        //                         if (out_data[l] != last_out_data && out_data[l] != -1)
-        //                         {
-        //                             cout << "WARNING: out:" << cur_out_name << " conflict at thread " << m << " and position " << l << ": curout is " << out_data[l] << ", lastout is " << last_out_data << endl;
-        //                         }
-        //                         continue;
-        //                     }
-
-        //                     if (out_data[l] == -1)
-        //                     {
-        //                         last_out_time = (tvs->back());
-        //                         last_out_data = (tvs_val->back());
-        //                         // if(cur_out_name == "tile_ICCADs_core_ICCADs_div_ICCADs_intadd_6_ICCADs_n18" && m >= 6341 && m <= 6343)
-        //                         //     cout << "thread: " << m << ", the last -- last_time:" << last_out_time << ", last_value:" << last_out_data << endl;
-        //                         break;
-        //                     }
-        //                     if (l == out_start + m * cur_width + 1 && m != 0)
-        //                     {
-        //                         // if(cur_out_name == "tile_ICCADs_core_ICCADs_div_ICCADs_intadd_6_ICCADs_n18" && m >= 6341 && m <= 6343)
-        //                         //     cout << "WARNING: out:" << cur_out_name << "(thread:" << m << ") time conflict, current out time " << out_time[l] << " less than last_out_time " << last_out_time << "; cur_out: " << out_data[l] <<", next: " << out_data[l+1] << ", last_out: " << last_out_data << ", pos: " << l - out_start << endl;
-        //                         while (out_time[l] <= last_out_time && out_time[l] > 0)
-        //                         {
-
-        //                             if (tvs->size() <= 1)
-        //                             {
-        //                                 // out_times[cur_out_name].pop_back();
-        //                                 // out_datas[cur_out_name].pop_back();
-        //                                 tvs->pop_back();
-        //                                 tvs_val->pop_back();
-        //                                 break;
-        //                             }
-        //                             // out_times[cur_out_name].pop_back();
-        //                             // out_datas[cur_out_name].pop_back();
-        //                             tvs->pop_back();
-        //                             tvs_val->pop_back();
-        //                             last_out_time = (tvs->back());
-        //                             last_out_data = (tvs_val->back());
-        //                             // if(cur_out_name == "tile_ICCADs_core_ICCADs_div_ICCADs_intadd_6_ICCADs_n18")
-        //                             //     cout << "\tAfter pop: out:" << cur_out_name << "(thread:" << m << ") time conflict, current out time " << out_time[l] << " less than last_out_time " << last_out_time << "; cur_out: " << out_data[l] <<", next: " << out_data[l+1] << ", last_out: " << last_out_data << ", pos: " << l - out_start << endl;
-        //                         }
-        //                     }
-        //                     unsigned int cur_out_time = out_time[l];
-        //                     short cur_out_data = out_data[l];
-        //                     if (cur_out_data == -1)
-        //                     {
-        //                         break;
-        //                     }
-        //                     // if(cur_out_name == "tile_ICCADs_core_ICCADs_div_ICCADs_intadd_6_ICCADs_n18" && m >= 6341 && m <= 6343)
-        //                     //     cout << "thread: " << m << ", last_time:" << last_out_time << ", last_value:" << last_out_data << ";cur: " << cur_out_time << ", " << cur_out_data << endl;
-        //                     if (cur_out_data != last_out_data)
-        //                     {
-        //                         tvs->push_back(cur_out_time);
-        //                         tvs_val->push_back(cur_out_data);
-        //                         // out_times[cur_out_name].push_back(cur_out_time);
-        //                         // out_datas[cur_out_name].push_back(cur_out_data);
-        //                     }
-        //                     last_out_time = (tvs->back());
-        //                     last_out_data = (tvs_val->back());
-        //                     // if(cur_out_name == "tile_ICCADs_core_ICCADs_div_ICCADs_intadd_6_ICCADs_n18" && m >= 6341 && m <= 6343)
-        //                     //     cout << "thread: " << m << ", last_time:" << last_out_time << ", last_value:" << last_out_data << endl;
-        //                 }
-        //                 if (l >= out_start + output_size[j])
-        //                 {
-        //                     break;
-        //                 }
-        //             }
-        //             out_times[cur_out_name] = tvs;
-        //             out_values[cur_out_name] = tvs_val;
-        //         }
-        //     }
-
-        // }
-
-
+    ofstream outinstr(instr_out);
+    for (map<int, Processor>::iterator it = processors.begin(); it != processors.end(); it++)
+    {
+        outinstr << "processor " << it->first << ":" << endl;
+        vector<string> instrs = it->second.instr_mem;
+        for (vector<string>::iterator i = instrs.begin(); i != instrs.end(); i++)
+        {
+            outinstr << *i << endl;
+        }
+        outinstr << endl;
+    }
+    outinstr.close();
+
+    ofstream outdir(out_dir);
+    for (map<string, string>::iterator i = pin_bits.begin(); i != pin_bits.end(); i++)
+    {
+        if (i->second == "output")
+        {
+            for (map<int, LutType>::iterator it = luts.begin(); it != luts.end(); it++)
+            {
+                if (it->second.out_ports == i->first)
+                {
+                    outdir << "Pin: ";
+                    outdir.setf(ios::left);
+                    outdir.width(10);
+                    outdir << i->first;
+                    outdir << "Clutser: ";
+                    outdir.setf(ios::left);
+                    outdir.width(10);
+                    outdir << it->second.node_addr[0];
+                    outdir << "Processor: ";
+                    outdir.setf(ios::left);
+                    outdir.width(10);
+                    outdir << it->second.node_addr[1] << endl;
+                }
+            }            
+        }
+    }
+    outdir.close();
+
+    auto end_ins = std::chrono::steady_clock::now();
+    long duration_ins = std::chrono::duration_cast<std::chrono::milliseconds>(end_ins - start_ins).count();
+    cout << "Successfully finished instruction generation. (" << duration_ins << "ms)" << endl;
+    cout << endl;
+
+    auto end_total = std::chrono::steady_clock::now();
+    long duration_total = std::chrono::duration_cast<std::chrono::milliseconds>(end_total - start_total).count();
+    cout << "COMPILING DONE!    TIME:" << duration_total << "ms" << endl;
+    cout << endl;
 }
 
 
-// void merge_ptr(unsigned int *list, unsigned int start1, unsigned int start2, unsigned int end1, unsigned int end2, unsigned int &length,
-//                short *val_list, unsigned int val_start1, unsigned int val_start2, unsigned int val_end1, unsigned int val_end2, unsigned int &val_length,
-//                unsigned int id)
-// {
-//     unsigned int *sorted = (unsigned int *)malloc(sizeof(unsigned int) * (end1 - start1 + end2 - start2));
-//     short *val_sorted = (short *)malloc(sizeof(short) * (end1 - start1 + end2 - start2) * (id + 2)); // must id and 2 merged
-//     unsigned int ti = 0, val_ti = 0, i = start1, j = start2, val_i = val_start1, val_j = val_start2;
-//     while (i < end1 || j < end2)
-//     {
-//         if (j == end2)
-//         {
-//             sorted[ti] = list[i++];
-//             for (unsigned k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i + k];
-//             }
-//             val_sorted[val_ti + id] = val_list[val_j - 2];
-//             val_sorted[val_ti + id + 1] = val_list[val_j - 1];
-//             val_i += id;
-//         }
-//         else if (i == end1)
-//         {
-//             sorted[ti] = list[j++];
-//             for (unsigned k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i - id + k];
-//             }
-//             val_sorted[val_ti + id] = val_list[val_j];
-//             val_sorted[val_ti + id + 1] = val_list[val_j + 1];
-//             val_j += 2;
-//         }
-//         else if (list[i] < list[j])
-//         {
-//             sorted[ti] = list[i++];
-//             for (unsigned k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i + k];
-//             }
-//             val_sorted[val_ti + id] = val_list[val_j - 2];
-//             val_sorted[val_ti + id + 1] = val_list[val_j - 1];
-//             val_i += id;
-//         }
-//         else if (list[i] > list[j])
-//         {
-//             sorted[ti] = list[j++];
-//             for (unsigned k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i - id + k];
-//             }
-//             val_sorted[val_ti + id] = val_list[val_j];
-//             val_sorted[val_ti + id + 1] = val_list[val_j + 1];
-//             val_j += 2;
-//         }
-//         else
-//         {
-//             sorted[ti] = list[i++];
-//             j++;
-//             for (unsigned k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i + k];
-//             }
-//             val_sorted[val_ti + id] = val_list[val_j];
-//             val_sorted[val_ti + id + 1] = val_list[val_j + 1];
-//             val_i += id;
-//             val_j += 2;
-//         }
-//         ti++;
-//         val_ti += (id + 2);
-//     }
-//     length = ti;
-//     val_length = val_ti;
-//     for (val_ti = 0, ti = 0; ti < length; ti++, val_ti += (id + 2))
-//     {
-//         list[ti + start1] = sorted[ti];
-//         for (int k = 0; k < id + 2; k++)
-//         {
-//             val_list[k + val_ti + val_start1] = val_sorted[val_ti + k];
-//         }
-//     }
-//     free(sorted);
-//     free(val_sorted);
-// }
-
-// void merge2(unsigned int *list, unsigned int start, unsigned int &length,
-//             short *val_list, unsigned int val_start, // unsigned int &val_length,
-//             // std::vector<unsigned int>* list1, std::vector<short>* val_list1, unsigned int end1,
-//             // std::vector<unsigned int>* list2, std::vector<short>* val_list2, unsigned int end2)
-//             unsigned int *list1, short *val_list1, unsigned int end1,
-//             unsigned int *list2, short *val_list2, unsigned int end2)
-// {
-//     unsigned int ti = start, val_ti = val_start, i = 0, j = 0;
-//     while (i < end1 || j < end2)
-//     {
-//         if (j == end2)
-//         {
-//             list[ti] = list1[i];
-//             val_list[val_ti] = val_list1[i];
-//             val_list[val_ti + 1] = val_list2[j - 1];
-//             i++;
-//         }
-//         else if (i == end1)
-//         {
-//             list[ti] = list2[j];
-//             val_list[val_ti] = val_list1[i - 1];
-//             val_list[val_ti + 1] = val_list2[j];
-//             j++;
-//         }
-//         else if (list1[i] < list2[j])
-//         {
-//             list[ti] = list1[i];
-//             val_list[val_ti] = val_list1[i];
-//             val_list[val_ti + 1] = val_list2[j - 1];
-//             i++;
-//         }
-//         else if (list1[i] > list2[j])
-//         {
-//             list[ti] = list2[j];
-//             val_list[val_ti] = val_list1[i - 1];
-//             if (start == 33038210)
-//             {
-//                 cout << "j: " << j << ", val_ti: " << val_ti << endl;
-//                 cout << "time: " << ti << "--" << list[ti] << endl;
-//             }
-//             val_list[val_ti + 1] = val_list2[j];
-//             j++;
-//         }
-//         else
-//         {
-//             list[ti] = list1[i];
-//             val_list[val_ti] = val_list1[i];
-//             val_list[val_ti + 1] = val_list2[j];
-//             j++;
-//             i++;
-//         }
-//         ti++;
-//         val_ti += 2;
-//     }
-//     length = ti - start;
-//     // val_length = val_ti - val_start;
-// }
-
-// void merge(unsigned int *list, unsigned int start, unsigned int &length,
-//            short *val_list, unsigned int val_start, unsigned int &val_length, unsigned int id,
-//            // std::vector<unsigned int>* list1, std::vector<short>* val_list1, unsigned int end2)
-//            unsigned int *list1, short *val_list1, unsigned int end2)
-// {
-//     unsigned int *sorted = (unsigned int *)malloc(sizeof(unsigned int) * (end2 + length));
-//     short *val_sorted = (short *)malloc(sizeof(short) * (end2 + length) * (id + 1));
-//     unsigned int ti = 0, val_ti = 0, i = start, j = 0, val_i = val_start, end1 = start + length;
-//     // auto start1 = list1->begin();
-//     // auto val_start1 = val_list1->begin();
-//     while (i < end1 || j < end2)
-//     {
-//         if (j == end2)
-//         {
-//             sorted[ti] = list[i++];
-//             for (int k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i + k];
-//             }
-//             // val_sorted[val_ti+id] = *(val_start1+j-1);
-//             val_sorted[val_ti + id] = val_list1[j - 1];
-//             val_i += id;
-//         }
-//         else if (i == end1)
-//         {
-//             // sorted[ti] = *(start1+j);
-//             sorted[ti] = list1[j];
-//             for (int k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i - id + k];
-//             }
-//             // val_sorted[val_ti+id] = *(val_start1+j);
-//             val_sorted[val_ti + id] = val_list1[j];
-//             j++;
-//         }
-//         // else if (*(start1+j) < list[i]) {
-//         else if (list1[j] < list[i])
-//         {
-//             // sorted[ti] = *(start1+j);
-//             sorted[ti] = list1[j];
-//             for (int k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i - id + k];
-//             }
-//             // val_sorted[val_ti+id] = *(val_start1+j);
-//             val_sorted[val_ti + id] = val_list1[j];
-//             j++;
-//         }
-//         else if (list1[j] > list[i])
-//         {
-//             // else if (*(start1+j) > list[i]) {
-//             sorted[ti] = list[i++];
-//             for (int k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i + k];
-//             }
-//             // val_sorted[val_ti+id] = *(val_start1+j-1);
-//             val_sorted[val_ti + id] = val_list1[j - 1];
-//             val_i += id;
-//         }
-//         else
-//         {
-//             sorted[ti] = list[i++];
-//             for (int k = 0; k < id; ++k)
-//             {
-//                 val_sorted[val_ti + k] = val_list[val_i + k];
-//             }
-//             // val_sorted[val_ti+id] = *(val_start1+j);
-//             val_sorted[val_ti + id] = val_list1[j];
-//             val_i += id;
-//             j++;
-//         }
-//         ti++;
-//         val_ti += (id + 1);
-//     }
-//     length = ti;
-//     val_length = val_ti;
-//     for (ti = 0; ti < length; ti++)
-//     {
-//         list[ti + start] = sorted[ti];
-//     }
-//     for (val_ti = 0, ti = 0; ti < length; ti++, val_ti += (id + 1))
-//     {
-//         list[ti + start] = sorted[ti];
-//         for (int k = 0; k < id + 1; k++)
-//         {
-//             val_list[k + val_ti + val_start] = val_sorted[val_ti + k];
-//         }
-//     }
-//     free(sorted);
-//     free(val_sorted);
-// }
-
-vector<idx_t> part(vector<idx_t> &xadj, vector<idx_t> &adjncy, /*vector<idx_t> &adjwgt, */ decltype(METIS_PartGraphKway) *METIS_PartGraphFunc)
+vector<idx_t> part_func(vector<idx_t> &xadj, vector<idx_t> &adjncy, /*vector<idx_t> &adjwgt, */ decltype(METIS_PartGraphKway) *METIS_PartGraphFunc)
 {
     idx_t nVertices = xadj.size() - 1;
     idx_t nEdges = adjncy.size() / 2;
@@ -1358,15 +1048,96 @@ string toBinary(int n)
         r += (n % 2 == 0 ? "0" : "1");
         n /= 2;
     }
+    reverse(r.begin(), r.end());
     return r;
+}
+
+string HextoBinary(string HexDigit)
+{
+    string BinDigit;
+    for (int i = 0; i < HexDigit.length(); i++)
+    {
+        char e = HexDigit[i];
+        if (e >= 'a' && e <= 'f')
+        {
+            int a = static_cast<int>(e - 'a' + 10);
+            switch (a)
+            {
+            case 10:
+                BinDigit += "1010";
+                break;
+            case 11:
+                BinDigit += "1011";
+                break;
+            case 12:
+                BinDigit += "1100";
+                break;
+            case 13:
+                BinDigit += "1101";
+                break;
+            case 14:
+                BinDigit += "1110";
+                break;
+            case 15:
+                BinDigit += "1111";
+                break;
+            }
+        }
+        else if (isdigit(e))
+        {
+            int b = static_cast<int>(e - '0');
+            switch (b)
+            {
+            case 1:
+                BinDigit += "0001";
+                break;
+            case 2:
+                BinDigit += "0010";
+                break;
+            case 3:
+                BinDigit += "0011";
+                break;
+            case 4:
+                BinDigit += "0100";
+                break;
+            case 5:
+                BinDigit += "0101";
+                break;
+            case 6:
+                BinDigit += "0110";
+                break;
+            case 7:
+                BinDigit += "0111";
+                break;
+            case 8:
+                BinDigit += "1000";
+                break;
+            case 9:
+                BinDigit += "1001";
+                break;
+            }
+        }
+    }
+    return BinDigit;
+}
+
+bool cmp(pair<int, int> a, pair<int, int> b)
+{
+    return a.second < b.second;
 }
 
 string cat_instr_1(Instr_1 &instr_1)
 {
+    string LUT_Value = HextoBinary(instr_1.LUT_Value);
+    int filling_num = 4 - instr_1.Operand_Addr.size();
+    for (int i = 0; i < filling_num; i++)
+    {
+        instr_1.Operand_Addr.insert(instr_1.Operand_Addr.begin(), MEM_DEPTH - 1);
+    }
     string cat_instr_1;
     stringstream ss;
-    ss << "00" << instr_1.LUT_Value << bitset<6>(toBinary(instr_1.Node_Addr[0])) << bitset<6>(toBinary(instr_1.Node_Addr[1])) << instr_1.LUT_Input_Select \
-       << bitset<9>(toBinary(instr_1.Operand_Addr[0])) << bitset<9>(toBinary(instr_1.Operand_Addr[1])) << bitset<9>(toBinary(instr_1.Operand_Addr[2])) << bitset<9>(toBinary(instr_1.Operand_Addr[3])) \
+    ss << "00" << bitset<16>(LUT_Value) << bitset<6>(toBinary(instr_1.Node_Addr[0])) << bitset<6>(toBinary(instr_1.Node_Addr[1])) << bitset<4>(instr_1.Data_Mem_Select)
+       << bitset<9>(toBinary(instr_1.Operand_Addr[0])) << bitset<9>(toBinary(instr_1.Operand_Addr[1])) << bitset<9>(toBinary(instr_1.Operand_Addr[2])) << bitset<9>(toBinary(instr_1.Operand_Addr[3]))
        << string(10, '0');
     cat_instr_1 = ss.str();
     return cat_instr_1;

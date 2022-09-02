@@ -225,6 +225,7 @@ typedef struct
     vector<int> in_net_from_level;
     vector<int> in_net_from_pos_at_level;
     vector<int> node_addr;          // cluster_processor
+    int res_pos_at_mem;
 
     // friend class boost::serialization::access;
     // template <class Archive>

@@ -125,7 +125,8 @@ void Parser::parse_v(std::string& v_path){
                         int i = cur_pin.lindex;
                         for(int j = 0; j < cur_pin.size; j++) {
                             std::string _name = tmp_name + "[" + to_string(i) + "]";
-                            pin_bits.push_back(_name);
+                            // pin_bits.push_back(_name);
+                            pin_bits.insert(pair<string, string>(_name, cur_pin.type));
                             if(cur_pin.lindex > cur_pin.rindex) {
                                 i--;
                             }
@@ -153,7 +154,8 @@ void Parser::parse_v(std::string& v_path){
                         cur_pin.rindex = -1;                       
                         cur_pin.size = 1;                       
                         pins[tmp_name] = cur_pin;
-                        pin_bits.push_back(tmp_name);
+                        // pin_bits.push_back(tmp_name);
+                        pin_bits.insert(pair<string, string>(tmp_name, cur_pin.type));
                     }
 
                     // cout << "pin name: ";
@@ -246,7 +248,9 @@ void Parser::parse_v(std::string& v_path){
                         cur_lut.num = lut_num; 
                         lut_num += 1;
                         cur_lut.out_ports = tmp[1];
-                        vector<string>::iterator i = find(pin_bits.begin(), pin_bits.end(), cur_lut.out_ports);
+                        // vector<string>::iterator i = find(pin_bits.begin(), pin_bits.end(), cur_lut.out_ports);
+                        // assert(i != pin_bits.end());
+                        map<string, string>::iterator i = pin_bits.find(cur_lut.out_ports);
                         assert(i != pin_bits.end());
 
                         string tmp_line = "";
@@ -260,7 +264,9 @@ void Parser::parse_v(std::string& v_path){
                             vector<string> tmp_in_ports = Split(in_ports_vec, ",");
                             cur_lut.in_ports = tmp_in_ports;
                             for (int i = 0; i < cur_lut.in_ports.size(); i++) {
-                                vector<string>::iterator iter = find(pin_bits.begin(), pin_bits.end(), cur_lut.in_ports[i]);
+                                // vector<string>::iterator iter = find(pin_bits.begin(), pin_bits.end(), cur_lut.in_ports[i]);
+                                // assert(iter != pin_bits.end());
+                                map<string, string>::iterator iter = pin_bits.find(cur_lut.in_ports[i]);
                                 assert(iter != pin_bits.end());
                             }
 
@@ -398,7 +404,9 @@ void Parser::parse_v(std::string& v_path){
                             }
                             cur_lut.in_ports = tmp_in_ports;
                             for (int i = 0; i < cur_lut.in_ports.size(); i++) {    
-                                vector<string>::iterator iter = find(pin_bits.begin(), pin_bits.end(), cur_lut.in_ports[i]);
+                                // vector<string>::iterator iter = find(pin_bits.begin(), pin_bits.end(), cur_lut.in_ports[i]);
+                                // assert(iter != pin_bits.end());
+                                map<string, string>::iterator iter = pin_bits.find(cur_lut.in_ports[i]);
                                 assert(iter != pin_bits.end());
                             }
 

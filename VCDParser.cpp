@@ -1,9 +1,14 @@
 
 #include <iostream>
+#include <vector>
+#include <algorithm>
+#include <numeric>
+#include <thread>
 
 #include "VCDParser.h"
         
-using namespace std;      
+using namespace std;
+
 //! Instance a new VCD file container.
 VCDParser::VCDParser(){
 
@@ -32,7 +37,7 @@ VCDParser::~VCDParser(){
         {
             delete *i;
         }
-        
+
         delete *j;
     }
     for(auto it:signals_map){
@@ -413,8 +418,8 @@ bool VCDParser::parse(std::string& vcdFilePath){//, std::map<std::string, int>& 
             new_signal -> size = stoi(line_vec[2]);
             new_signal -> hash = line_vec[3];
             new_signal -> reference = line_vec[4];
-            set_name_hash_pair(line_vec[4], line_vec[3]);
-            set_hash_name_pair(line_vec[3], line_vec[4]);
+            // set_name_hash_pair(line_vec[4], line_vec[3]);
+            // set_hash_name_pair(line_vec[3], line_vec[4]);
             if (line_vec.size() == 7)
             {
                 string tmp = line_vec[5];
@@ -425,6 +430,8 @@ bool VCDParser::parse(std::string& vcdFilePath){//, std::map<std::string, int>& 
                 assert(pos1 != std::string::npos && pos3 != std::string::npos);
                 if (pos2 != std::string::npos)
                 {
+                    set_name_hash_pair(line_vec[4], line_vec[3]);
+                    set_hash_name_pair(line_vec[3], line_vec[4]);
                     new_signal -> lindex = stoi(tmp.substr(pos1+1,pos2-pos1-1));
                     new_signal -> rindex = stoi(tmp.substr(pos2+1,pos3-pos2-1));
                     int start = new_signal -> lindex;
@@ -450,6 +457,8 @@ bool VCDParser::parse(std::string& vcdFilePath){//, std::map<std::string, int>& 
                 }
                 else
                 {
+                    set_name_hash_pair(line_vec[4] + line_vec[5], line_vec[3]);
+                    set_hash_name_pair(line_vec[3], line_vec[4] + line_vec[5]);
                     new_signal -> lindex = stoi(tmp.substr(pos1+1,pos3-pos1-1));
                     new_signal -> rindex = -1;
                     string name = new_signal->reference + "[" + to_string(new_signal -> lindex) + "]";
@@ -468,6 +477,8 @@ bool VCDParser::parse(std::string& vcdFilePath){//, std::map<std::string, int>& 
             }
             else
             {
+                set_name_hash_pair(line_vec[4], line_vec[3]);
+                set_hash_name_pair(line_vec[3], line_vec[4]);
                 if(new_signal -> size == 1)
                 {
                     new_signal -> lindex = -1;
