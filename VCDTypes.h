@@ -213,19 +213,25 @@ typedef struct
 // LutType: structure of lookup table
 typedef struct
 {
-    // std::string             name;
     unsigned long long num;
+
+    // Dff
+    // int isDff;                      // 0: notDff; 1: Dff
+    // vector<pair<string, string>> sens_edge;
+
     vector<std::string> in_ports;
     std::string out_ports;
     std::string lut_res;
 
-    vector<int> in_net_from_id;     // in net from out net from luts; -1: in net from initial module; -2: in net from assign pin bit
+    vector<int> in_net_from_id;     // in net from out net from luts or dffs; -1: in net from initial module; -2: in net from assign pin bit
     vector<std::string> in_net_from_info;
+    // vector<int> in_net_from_dff;    // 1: DFF; 0: NOT DFF
     vector<int> in_net_from_part;   // -1: in net from initial module; -2: in net from assign pin bit; -3: current part; other: part num
-    vector<int> in_net_from_level;
+    vector<int> in_net_from_level;  // -1: in net from initial module; -2: in net from assign pin bit; -3: in net from dffs
     vector<int> in_net_from_pos_at_level;
     vector<int> node_addr;          // cluster_processor
     int res_pos_at_mem;
+    // int get_res_instr_pos_at_mem;
 
     // friend class boost::serialization::access;
     // template <class Archive>
@@ -243,6 +249,25 @@ typedef struct
     // }
 } LutType;
 
+typedef struct
+{
+    unsigned long long num;
+    int type;                                                       // 0: unconditional judgment; 1: if; 2: if...else...; 3: if...else if...
+    string dff_out;
+    vector<pair<string, string>> sens_edge;                         // <sensitive signals, edge>
+    vector<pair<string, pair<string, int>>> assignsig_condsig;      // <assignment signal, <condition signal, condition>>
+    vector<string> dff_in_ports;
+
+    vector<int> in_net_from_id;     // in net from out net from luts or dffs; -1: in net from initial module; -2: in net from assign pin bit
+    vector<std::string> in_net_from_info;
+    // vector<int> in_net_from_dff;    // 1: DFF; 0: NOT DFF
+    vector<int> in_net_from_part;   // -1: in net from initial module; -2: in net from assign pin bit; -3: current part; other: part num
+    vector<int> in_net_from_level;  // -1: in net from initial module; -2: in net from assign pin bit; -3: in net from dffs
+    vector<int> in_net_from_pos_at_level;
+    vector<int> node_addr;          // cluster_processor
+    int res_pos_at_mem;
+    // int get_res_instr_pos_at_mem;
+} DffType;
 
 //! Represents a scope type, scope name pair and all of it's child signals.
 struct vcdscope {

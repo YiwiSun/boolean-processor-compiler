@@ -4,9 +4,9 @@ EXEC=compile # compile
 
 HEADS=$(wildcard ./*.h)
 SRC=$(wildcard ./*.cpp)
-FILTEROUT=$(wildcard ./test/*.cpp)
-SRC_FILES=$(filter-out $(FILTEROUT), $(SRC))
-OBJ=$(SRC_FILES:%.cpp=%.o)
+# FILTEROUT=$(wildcard ./test/*.cpp)
+# SRC_FILES=$(filter-out $(FILTEROUT), $(SRC))
+OBJ=$(SRC:%.cpp=%.o)
 
 CPP=g++
 OPTS=-std=c++11 -O2 -Wall -g

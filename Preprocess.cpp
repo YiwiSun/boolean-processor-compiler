@@ -30,11 +30,9 @@ using namespace std;
 // class MyOArchive : public boost::archive::text_oarchive_impl<MyOArchive> {
 // public:
 //     bool MyData;
-
 //     friend class boost::archive::detail::common_oarchive<MyOArchive>;
 //     friend class basic_text_oarchive<MyOArchive>;
 //     friend class boost::archive::save_access;
-
 //     MyOArchive(std::ostream &os, unsigned int flags = 0) : boost::archive::text_oarchive_impl<MyOArchive>(os, flags) {}
 // };
 
@@ -42,19 +40,16 @@ using namespace std;
 // public:
 //     inter() {}
 //     ~inter() {}
-
 //     /* data */
 //     Parser p;
 //     std::vector<std::vector<int>> levels;
 //     std::map<std::string, int> initial_net_map; // net : inintial id
-
 //     std::vector<unsigned int> data_in_num_start;
 //     std::vector<unsigned int> data_out_num_start;
 //     // std::vector<unsigned int> delay_start;
 //     // std::vector<unsigned int> delay_width;
 //     std::vector<unsigned int> functions_start;
 //     // std::vector<unsigned int> functions_width;
-
 //     std::vector<short> data_in_num;             // in ports num of each lut
 //     std::vector<short> data_out_num;            // out ports num of each lut
 //     std::vector<unsigned int> val_num_start;    // input val starting id of each lut
@@ -66,9 +61,7 @@ using namespace std;
 //     // std::vector<short> host_out_bit;
 //     // std::vector<float> host_rise_val;
 //     // std::vector<float> host_fall_val;
-
 //     // std::vector<short> host_functions;
-
 //     template<class Archive>
 //     void serialize(Archive & ar, const unsigned int version) {
 //         ar & p;
@@ -132,7 +125,7 @@ map<int, vector<int>> &adjList/*, vector<int> &edgesSize, vector<int> &edgesOffs
         adjList[i].erase(unique(adjList[i].begin(), adjList[i].end()), adjList[i].end());
         // edgesSize.push_back(adjList[i].size());
     }
-
+    // debug
     // for (map<int, vector<int>>::iterator i = adjList.begin(); i != adjList.end(); i++)
     // {
     //     cout << i->first << " --- ";
@@ -181,29 +174,20 @@ vector<vector<int>> &levels) {
 }
 
 
-// int main(int argc, char **argv) {
-//     string v_path, inter_file;
-
 void inter::preprocess(string& v_path) {
-    // Parser _parser;
-
-    // if(argc == 3) {
-    //     v_path = argv[1];
-    //     inter_file = argv[2];
-    // }
-    // else {
-    //     cout << "[USAGE] ./Preprocess v_path [inter_file]" << endl;
-    //     exit(-1);
-    // }
-
-    /** pre process **/
+    /****************************************************************************************************/
+    /*                                          netlist parsing                                         */
+    /****************************************************************************************************/
     _parser.parse_v(v_path);
 
     map<int, LutType> luts = _parser.get_luts();
+    map<int, DffType> dffs = _parser.get_dffs();
     map<string, TimedValues*> pinbitValues = _parser.get_pinbitValues();
     map<string, string> assign_pairs = _parser. get_assign_pairs();
     map<string, vector<int>> net_for_id = _parser.net_for_id;
     map<string, int> net_from_id = _parser.net_from_id;
+    map<string, vector<int>> net_for_id_dff = _parser.net_for_id_dff;
+    map<string, int> net_from_id_dff = _parser.net_from_id_dff;
 
     // for gragh generation
     map<int, vector<int>> adjList;  // vertex : list of edges
@@ -212,17 +196,17 @@ void inter::preprocess(string& v_path) {
     vector<int> indegrees(n);
     // vector<vector<int>> levels;
 
-
-
-    /***************************** topology ordering ***************************/
-    cout << "2. Executing topology ordering." << endl;
+    /****************************************************************************************************/
+    /*                                           levelization                                           */
+    /****************************************************************************************************/
+    cout << "2. Executing levelization." << endl;
     auto start_pre = std::chrono::steady_clock::now();
     // generate adjacency list
     // cout << "Generating topological structure." << " ";
-    auto start_graph = chrono::steady_clock::now();
+    // auto start_graph = chrono::steady_clock::now();
     GenAdjList(luts, net_for_id, adjList);
-    auto end_graph = chrono::steady_clock::now();
-    long duration_graph = chrono::duration_cast<chrono::milliseconds> (end_graph - start_graph).count();
+    // auto end_graph = chrono::steady_clock::now();
+    // long duration_graph = chrono::duration_cast<chrono::milliseconds> (end_graph - start_graph).count();
     // cout << "(" << duration_graph << "ms" << ")" << endl;
 
     // topology order
@@ -233,11 +217,21 @@ void inter::preprocess(string& v_path) {
     // auto end_top = chrono::steady_clock::now();
     // long duration_top = chrono::duration_cast<chrono::milliseconds> (end_top-start_top).count();
     // cout << "(" << duration_top << "ms" << ")" << endl;
-    // cout << "levels size: " << levels.size() << endl;
+    cout << "levels size: " << levels.size() << endl;
+    // debug
+    for (auto l = levels.begin(); l != levels.end(); l++)
+    {
+        cout << "level" << distance(levels.begin(), l) << ": " << endl;
+        for (auto i = l->begin(); i != l->end(); i++)
+        {
+            cout << *i << " ";
+        }
+        cout << endl;
+    }
 
-
-
-    /*************************** process levels *******************************/
+    /****************************************************************************************************/
+    /*                                          pre-processing                                          */
+    /****************************************************************************************************/
     vector<int> tmp_lut_level(luts.size());
     vector<int> tmp_lut_pos_at_level(luts.size());
     for (unsigned i = 0; i < levels.size(); i++) {
@@ -249,13 +243,9 @@ void inter::preprocess(string& v_path) {
         }
     }
 
-
-
-    /************************* for gragh generation ***********************/
     // int initial_id = 0;
     // edges = 0;
     // vector<vector<int>> tmp_adjncys(luts.size());
-
     // for (unsigned i = 0; i < luts.size(); ++i) {
     //     LutType cur_lut = luts[i];
     //     std::vector<string> _in_net = cur_lut.in_ports;
@@ -286,7 +276,6 @@ void inter::preprocess(string& v_path) {
     //             int cur_val = (*(tvs->begin())).value;
     //             //(((processor.instances).find(_inst_name_vec[i]))->second).in_net_from_pos_at_level.push_back(cur_val);
     //             // processor.add_in_net_from(-2, cur_in, -2, cur_val, _inst_name_vec[i]);
-
     //             // at this case, 'in net from pos at level' means value
     //             luts[i].in_net_from_id.push_back(-2);
     //             luts[i].in_net_from_info.push_back(cur_in);
@@ -312,7 +301,6 @@ void inter::preprocess(string& v_path) {
     //                 int cur_val = (*(tvs->begin())).value;
     //                 //(((processor.instances).find(_inst_name_vec[i]))->second).in_net_from_pos_at_level.push_back(cur_val);
     //                 // processor.add_in_net_from(-2, temp, -2, cur_val, _inst_name_vec[i]);
-
     //                 // at this case, 'in net from pos at level' means value
     //                 luts[i].in_net_from_id.push_back(-2);
     //                 luts[i].in_net_from_info.push_back(temp);
@@ -328,9 +316,7 @@ void inter::preprocess(string& v_path) {
     //                     initial_id++;
     //                 }
     //                 //(((processor.instances).find(_inst_name_vec[i]))->second).in_net_from_pos_at_level.push_back(initial_net_map[temp]);
-
     //                 // processor.add_in_net_from(-1, temp, -1, initial_net_map[temp], _inst_name_vec[i]);
-
     //                 // at this case, 'in net from pos at level' means initial id
     //                 luts[i].in_net_from_id.push_back(-1);
     //                 luts[i].in_net_from_info.push_back(temp);
@@ -344,7 +330,6 @@ void inter::preprocess(string& v_path) {
     //                 initial_id++;
     //             }
     //             // processor.add_in_net_from(-1, cur_in, -1, initial_net_map[cur_in], _inst_name_vec[i]);
-
     //             // at this case, 'in net from pos at level' means initial id
     //             luts[i].in_net_from_id.push_back(-1);
     //             luts[i].in_net_from_info.push_back(cur_in);
@@ -370,33 +355,121 @@ void inter::preprocess(string& v_path) {
     // }
 
     edges = 0;
-    vector<vector<int>> tmp_adjncys(luts.size());
+    vector<vector<int>> tmp_adjncys(luts.size() + dffs.size());
 
-    for (unsigned i = 0; i < luts.size(); ++i)
+    // for (unsigned i = 0; i < luts.size(); ++i)
+    // {
+    //     LutType cur_lut = luts[i];
+    //     std::vector<string> _in_net = cur_lut.in_ports;
+    //     for (unsigned j = 0; j < _in_net.size(); ++j)
+    //     {
+    //         string cur_in = _in_net[j];
+    //         if (net_from_id.find(cur_in) != net_from_id.end())
+    //         {
+    //             edges += 1;
+    //             int _id = net_from_id[cur_in];
+    //             tmp_adjncys[luts[i].num].push_back(_id);
+    //             tmp_adjncys[_id].push_back(luts[i].num);
+    //         }
+    //         else if (assign_pairs.find(cur_in) != assign_pairs.end())
+    //         {
+    //             string temp = assign_pairs[cur_in];
+    //             if (net_from_id.find(temp) != net_from_id.end())
+    //             {
+    //                 edges += 1;
+    //                 int _id = net_from_id[temp];
+    //                 // cout << "id: " << _id << endl;
+    //                 tmp_adjncys[luts[i].num].push_back(_id);
+    //                 tmp_adjncys[_id].push_back(luts[i].num);
+    //             }
+    //         }
+    //     }
+    // }
+    
+    auto total_size = luts.size() + dffs.size();
+    for (unsigned i = 0; i < total_size; ++i)
     {
-        LutType cur_lut = luts[i];
-        std::vector<string> _in_net = cur_lut.in_ports;
-        for (unsigned j = 0; j < _in_net.size(); ++j)
+        if (i < luts.size())
         {
-            string cur_in = _in_net[j];
-            if (net_from_id.find(cur_in) != net_from_id.end())
+            LutType cur_lut = luts[i];
+            std::vector<string> _in_net = cur_lut.in_ports;
+            for (unsigned j = 0; j < _in_net.size(); ++j)
             {
-                edges += 1;
-                int _id = net_from_id[cur_in];
-                // cout << "id: " << _id << endl;
-                tmp_adjncys[luts[i].num].push_back(_id);
-                tmp_adjncys[_id].push_back(luts[i].num);
-            }
-            else if (assign_pairs.find(cur_in) != assign_pairs.end())
-            {
-                string temp = assign_pairs[cur_in];
-                if (net_from_id.find(temp) != net_from_id.end())
+                string cur_in = _in_net[j];
+                if (net_from_id.find(cur_in) != net_from_id.end())
                 {
                     edges += 1;
-                    int _id = net_from_id[temp];
-                    // cout << "id: " << _id << endl;
+                    int _id = net_from_id[cur_in];
                     tmp_adjncys[luts[i].num].push_back(_id);
                     tmp_adjncys[_id].push_back(luts[i].num);
+                }
+                else if (net_from_id_dff.find(cur_in) != net_from_id_dff.end())
+                {
+                    edges += 1;
+                    int _id = net_from_id_dff[cur_in];
+                    tmp_adjncys[luts[i].num].push_back(_id + luts.size());
+                    tmp_adjncys[_id + luts.size()].push_back(luts[i].num);
+                }
+                else if (assign_pairs.find(cur_in) != assign_pairs.end())
+                {
+                    string temp = assign_pairs[cur_in];
+                    if (net_from_id.find(temp) != net_from_id.end())
+                    {
+                        edges += 1;
+                        int _id = net_from_id[temp];
+                        tmp_adjncys[luts[i].num].push_back(_id);
+                        tmp_adjncys[_id].push_back(luts[i].num);
+                    }
+                    else if (net_from_id_dff.find(temp) != net_from_id_dff.end())
+                    {
+                        edges += 1;
+                        int _id = net_from_id_dff[temp];
+                        tmp_adjncys[luts[i].num].push_back(_id + luts.size());
+                        tmp_adjncys[_id + luts.size()].push_back(luts[i].num);
+                    }
+                }
+            }
+        }
+        else
+        {
+            DffType cur_dff = dffs[i - luts.size()];
+            std::vector<string> _in_net = cur_dff.dff_in_ports;
+            for (unsigned j = 0; j < _in_net.size(); ++j)
+            {
+                string cur_in = _in_net[j];
+                assert((net_from_id_dff.find(cur_in) == net_from_id_dff.end()));
+                if (net_from_id.find(cur_in) != net_from_id.end())
+                {
+                    edges += 1;
+                    int _id = net_from_id[cur_in];
+                    tmp_adjncys[dffs[i].num + luts.size()].push_back(_id);
+                    tmp_adjncys[_id].push_back(dffs[i].num + luts.size());
+                }                
+                // else if (net_from_id_dff.find(cur_in) != net_from_id_dff.end())
+                // {
+                //     edges += 1;
+                //     int _id = net_from_id_dff[cur_in];
+                //     tmp_adjncys[dffs[i].num + luts.size()].push_back(_id + luts.size());
+                //     tmp_adjncys[_id + luts.size()].push_back(dffs[i].num + luts.size());
+                // }
+                else if (assign_pairs.find(cur_in) != assign_pairs.end())
+                {
+                    string temp = assign_pairs[cur_in];
+                    assert(net_from_id_dff.find(temp) == net_from_id_dff.end());
+                    if (net_from_id.find(temp) != net_from_id.end())
+                    {
+                        edges += 1;
+                        int _id = net_from_id[temp];
+                        tmp_adjncys[dffs[i].num + luts.size()].push_back(_id);
+                        tmp_adjncys[_id].push_back(dffs[i].num + luts.size());
+                    }                   
+                    // else if (net_from_id_dff.find(temp) != net_from_id_dff.end())
+                    // {
+                    //     edges += 1;
+                    //     int _id = net_from_id_dff[temp];
+                    //     tmp_adjncys[dffs[i].num + luts.size()].push_back(_id + luts.size());
+                    //     tmp_adjncys[_id + luts.size()].push_back(dffs[i].num + luts.size());
+                    // }
                 }
             }
         }
@@ -442,30 +515,24 @@ void inter::preprocess(string& v_path) {
     //     }
     //     cout << endl;
     // }
-
-
     // pre process for mapping to boolean processor
     // int _size = luts.size();
     // int total_size = levels.size();
-
     // std::vector<unsigned int> tmp_data_in_num_start(total_size);  // lut's starting id of each level
     // std::vector<unsigned int> tmp_data_out_num_start(total_size); // lut's starting id of each level
     // // std::vector<unsigned int> delay_start(total_size);
     // // std::vector<unsigned int> delay_width(total_size);
     // std::vector<unsigned int> tmp_functions_start(total_size);    // lut's starting id of each level
     // // std::vector<unsigned int> functions_width(total_size);
-
     // std::vector<short> tmp_data_in_num(_size);          // in ports num of each lut
     // std::vector<short> tmp_data_out_num(_size);         // out ports num of each lut
     // std::vector<unsigned int> tmp_val_num_start(_size); // input val starting id of each lut
     // // std::vector<short> delay_val_num(_size);
     // // std::vector<short> functions_func_num(_size);   // func num of each inst
     // // std::vector<short> functions_val_num(_size);    // func val num of each inst
-
     // int _sum = 0;
     // // int _delay_start = 0;
     // // int _functions_start = 0;
-
     // for (unsigned i = 0; i < levels.size(); ++i)
     // {
     //     std::vector<int> cur_level = levels[i];
@@ -485,16 +552,13 @@ void inter::preprocess(string& v_path) {
     //         tmp_data_in_num[j + _sum] = cur_in.size();
     //         std::string cur_out = cur_lut.out_ports;
     //         tmp_data_out_num[j + _sum] = cur_out.size();
-
     //         tmp_val_num_start[j + _sum] = val_num_width;
     //         unsigned int _val_num_width = cur_in.size();
     //         val_num_width += _val_num_width;
-
     //         // std::vector<Delay> delays = cur_inst.get_delay();
     //         // int _delay_width = delays.size();
     //         // delay_val_num[j + _sum] = _delay_width;
     //         // delay_width_ = max(_delay_width, delay_width_);
-
     //         // std::vector<std::vector<int>> functions = cur_inst.function_id_vec;
     //         // int func_height = functions.size();
     //         // int func_width = 0;
@@ -505,9 +569,7 @@ void inter::preprocess(string& v_path) {
     //         // }
     //         // functions_width_ = max(func_width * func_height, functions_width_);
     //         // functions_func_num[j + _sum] = func_height;
-    //         // functions_val_num[j + _sum] = func_width;
-
-            
+    //         // functions_val_num[j + _sum] = func_width;  
     //     }
     //     _sum += lut_num;
     //     // _delay_start += inst_num * delay_width_;
@@ -519,20 +581,16 @@ void inter::preprocess(string& v_path) {
     //{
     //     cout << data_out_num_start[i] << endl;
     // }
-
     // std::vector<short> host_delay_edges(_delay_start);
     // std::vector<short> host_in_bit(_delay_start);
     // std::vector<short> host_out_bit(_delay_start);
     // std::vector<float> host_rise_val(_delay_start);
     // std::vector<float> host_fall_val(_delay_start);
-
     // std::vector<short> host_functions(_functions_start);
-
     // for (unsigned i = 0; i < levels.size(); ++i)
     // {
     //     std::vector<int> cur_level = levels[i];
     //     const int inst_num = cur_level.size();
-
     //     int delay_start_ = delay_start[i];
     //     int delay_width_ = delay_width[i];
     //     int functions_width_ = functions_width[i];
@@ -540,7 +598,6 @@ void inter::preprocess(string& v_path) {
     //     for (int j = 0; j < inst_num; ++j)
     //     {
     //         Instance cur_inst = instances[_inst_name_vec[cur_level[j]]];
-
     //         std::vector<Delay> delays = cur_inst.get_delay();
     //         std::vector<string> cur_in = cur_inst.in_net;
     //         std::vector<string> cur_out = cur_inst.out_net;
@@ -565,7 +622,6 @@ void inter::preprocess(string& v_path) {
     //                 host_fall_val[delay_start_ + j * delay_width_ + ttt] = -1.0;
     //             }
     //         }
-
     //         std::vector<std::vector<int>> functions = cur_inst.function_id_vec;
     //         int func_height = functions.size();
     //         int func_width = functions_width_ / func_height;
@@ -590,7 +646,6 @@ void inter::preprocess(string& v_path) {
     //         }
     //     }
     // }
-
     // debug
     // for(unsigned i = 0; i < levels.size(); i++)
     // {
@@ -634,7 +689,7 @@ void inter::preprocess(string& v_path) {
 
     auto end_pre = std::chrono::steady_clock::now();
     long duration_pre = std::chrono::duration_cast<std::chrono::milliseconds>(end_pre - start_pre).count();
-    cout << "Successfully finished topology ordering. (" << duration_pre << "ms)" << endl;
+    cout << "Successfully finished levelization. (" << duration_pre << "ms)" << endl;
     cout << endl;
     
     // data_in_num_start = tmp_data_in_num_start;
