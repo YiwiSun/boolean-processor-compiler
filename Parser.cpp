@@ -1950,14 +1950,33 @@ void Parser::parse_v(std::string& v_path){
                         {
                             string in_ports_vec = tmp_line.substr(tmp_line.find(">") + 2, tmp_line.find(";") - tmp_line.find(">") - 2);
                             // no combined pins
-                            if (in_ports_vec.find(":") == string::npos)
+                            if (in_ports_vec.find(":") == string::npos || in_ports_vec.find("[") == string::npos || in_ports_vec.find("]") == string::npos)
                             {
-                                cur_lut.in_ports.push_back(in_ports_vec);
-                                assert(pin_bits.find(in_ports_vec) != pin_bits.end());
+                                if (pin_bits.find(in_ports_vec) != pin_bits.end())
+                                    cur_lut.in_ports.push_back(in_ports_vec);
+                                else
+                                {
+                                    assert(pins.find(in_ports_vec) != pins.end());
+                                    int lin = pins[in_ports_vec].lindex;
+                                    for (int j = 0; j < pins[in_ports_vec].size; j++)
+                                    {
+                                        std::string _name = in_ports_vec + "[" + to_string(lin) + "]";
+                                        cur_lut.in_ports.push_back(_name);
+                                        if (pins[in_ports_vec].lindex > pins[in_ports_vec].rindex)
+                                        {
+                                            lin--;
+                                        }
+                                        else
+                                        {
+                                            lin++;
+                                        }
+                                    }
+                                }
                             }                      
                             // multiple bits pin
                             else
                             {
+                                assert((in_ports_vec.find(":") != string::npos && in_ports_vec.find("[") != string::npos && in_ports_vec.find("]") != string::npos));
                                 vector<string> mul_pin;
                                 volatile int index = 0;
                                 int count = 0;
@@ -2544,7 +2563,7 @@ void Parser::parse_v(std::string& v_path){
                                         cur_dff.assignsig_condsig.push_back(make_pair(assignsig, cond));
                                     }
                                 }
-                                else if (((_tmp.begin() + distance(_tmp.begin(), it) + 1)->find(";") != string::npos) && ((_tmp.begin() + distance(_tmp.begin(), it) + 2)->find(";") == string::npos))
+                                else if (((_tmp.begin() + distance(_tmp.begin(), it) + 1)->find(";") == string::npos) && ((_tmp.begin() + distance(_tmp.begin(), it) + 2)->find(";") != string::npos))
                                 {
                                     if ((_tmp.begin() + distance(_tmp.begin(), it) + 1)->find("'") == string::npos)
                                     {

@@ -752,6 +752,8 @@ int main(int argc, char const *argv[])
     // equal distribution randomly
     vector<int> processor_id(parts, 0);
     map<int, vector<int>> processor_node;
+    int n_luts_per_cluster = ((luts.size() + dffs.size()) + parts - 1) / parts;
+    int used_processors_per_cluster = (n_luts_per_cluster + N_LUTS_PER_PROCESSOR  - 1) / N_LUTS_PER_PROCESSOR;
     for (auto l = levels.begin(); l != levels.end(); l++)
     {
         for (auto i = l->begin(); i != l->end(); i++)
@@ -761,7 +763,7 @@ int main(int argc, char const *argv[])
             luts[*i].node_addr.push_back(cur_part);
             luts[*i].node_addr.push_back(processor_id[cur_part]);
             processor_node[cur_part * N_PROCESSORS_PER_CLUSTER + processor_id[cur_part]].push_back(*i);
-            if (processor_id[cur_part] == N_PROCESSORS_PER_CLUSTER - 1)
+            if (processor_id[cur_part] == used_processors_per_cluster - 1)
             {
                 processor_id[cur_part] = 0;
             }
@@ -777,7 +779,7 @@ int main(int argc, char const *argv[])
         dffs[d->first].node_addr.push_back(cur_part);
         dffs[d->first].node_addr.push_back(processor_id[cur_part]);
         processor_node[cur_part * N_PROCESSORS_PER_CLUSTER + processor_id[cur_part]].push_back(d->first + luts.size());
-        if (processor_id[cur_part] == N_PROCESSORS_PER_CLUSTER - 1)
+        if (processor_id[cur_part] == used_processors_per_cluster - 1)
         {
             processor_id[cur_part] = 0;
         }
@@ -1682,15 +1684,15 @@ int main(int argc, char const *argv[])
                                 instr_1.Data_Mem_Select.append("0");
                             else
                                 instr_1.Data_Mem_Select.append("1");
-                            // for input initial signal "ld" changing
-                            if (cur_lut.in_net_from_info[in] == "ld")
-                                instr_1.Operand_Addr.push_back(MEM_DEPTH - 2);
+                            // for input initial signal changing
+                            if (cur_lut.in_net_from_info[in] == "rst_n")
+                                instr_1.Operand_Addr.push_back(258);
                             else
                                 instr_1.Operand_Addr.push_back(MEM_DEPTH - 1);
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_lut.in_net_from_info[in] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_lut.in_net_from_info[in] << " (LUT " << lut_num << ")" << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_lut.in_net_from_id[in] == -2) // -2: in net from assign pin bit
@@ -1718,8 +1720,9 @@ int main(int argc, char const *argv[])
                         ba.LUT_Node_Addr = cur_lut.node_addr;
                         ba.LUT_Instr_Addr = processors[cur_processor_id].instr_mem.size();
                         int operand_addr_num = instr_1.Operand_Addr.size();
-                        int range_left = 35 - operand_addr_num * 9;
-                        int range_right = 27 - operand_addr_num * 9;
+                        int input_num = cur_lut.in_ports.size();                        
+                        int range_left = (35 - 9 * (4 - input_num)) - operand_addr_num * 9;
+                        int range_right = (27 - 9 * (4 - input_num)) - operand_addr_num * 9;
                         ba.Replaced_Instr_Range = pair<int, int>(range_left, range_right);
                         blank_addrs[lut_num].push_back(ba);
                         instr_1.Operand_Addr.push_back(dffs[cur_lut.in_net_from_id[in] - luts.size()].res_pos_at_mem);
@@ -1727,7 +1730,7 @@ int main(int argc, char const *argv[])
                 }
                 string lut_instr = cat_instr_1(instr_1);
                 processors[cur_processor_id].instr_mem.push_back(lut_instr);
-                luts[lut_num].res_pos_at_mem = 0;
+                luts[lut_num].res_pos_at_mem = int(processors[cur_processor_id].instr_mem.size()) - 1;
                 processors[cur_processor_id].id_outaddr = pair<int, int>(lut_num, -1);
             }
             // inputs from other bps (clusters)
@@ -1789,15 +1792,18 @@ int main(int argc, char const *argv[])
                     get_res_instr_pos.push_back(it->second);
                     instr_start_pos.push_back(it->second);
                 }
-                for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
+                if (instr_start_pos.size() >= 1)
                 {
-                    if (*it == *(it - 1))
+                    for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
                     {
-                        *it += 1;
-                    }
-                    else if (*it < *(it - 1))
-                    {
-                        *it += (*(it - 1) - *it + 1);
+                        if (*it == *(it - 1))
+                        {
+                            *it += 1;
+                        }
+                        else if (*it < *(it - 1))
+                        {
+                            *it += (*(it - 1) - *it + 1);
+                        }
                     }
                 }
                 config_instr_pos = instr_start_pos;
@@ -1844,15 +1850,15 @@ int main(int argc, char const *argv[])
                                 instr_1.Data_Mem_Select.append("0");
                             else
                                 instr_1.Data_Mem_Select.append("1");
-                            // for input initial signal "ld" changing
-                            if (cur_lut.in_net_from_info[in] == "ld")
-                                instr_1.Operand_Addr.push_back(MEM_DEPTH - 2);
+                            // for input initial signal "rst_n" changing
+                            if (cur_lut.in_net_from_info[in] == "rst_n")
+                                instr_1.Operand_Addr.push_back(258);
                             else
                                 instr_1.Operand_Addr.push_back(MEM_DEPTH - 1);
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_lut.in_net_from_info[in] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_lut.in_net_from_info[in] << " (LUT " << lut_num << ")" << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_lut.in_net_from_id[in] == -2) // -2: in net from assign pin bit
@@ -1879,8 +1885,9 @@ int main(int argc, char const *argv[])
                         ba.LUT_Node_Addr = cur_lut.node_addr;
                         ba.LUT_Instr_Addr = processors[cur_processor_id].instr_mem.size();
                         int operand_addr_num = instr_1.Operand_Addr.size();
-                        int range_left = 35 - operand_addr_num * 9;
-                        int range_right = 27 - operand_addr_num * 9;
+                        int input_num = cur_lut.in_ports.size();
+                        int range_left = (35 - 9 * (4 - input_num)) - operand_addr_num * 9;
+                        int range_right = (27 - 9 * (4 - input_num)) - operand_addr_num * 9;
                         ba.Replaced_Instr_Range = pair<int, int>(range_left, range_right);
                         blank_addrs[lut_num].push_back(ba);
                         instr_1.Operand_Addr.push_back(dffs[cur_lut.in_net_from_id[in] - luts.size()].res_pos_at_mem);
@@ -1978,15 +1985,15 @@ int main(int argc, char const *argv[])
                                 instr_10.data_mem_select = 0;
                             else
                                 instr_10.data_mem_select = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_10.Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_10.Addr = 258;
                             else
                                 instr_10.Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")" << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2027,15 +2034,15 @@ int main(int argc, char const *argv[])
                                 instr_11.data_mem_select = 0;
                             else
                                 instr_11.data_mem_select = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_11.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_11.Operand_Addr = 258;
                             else
                                 instr_11.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")" << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2074,15 +2081,15 @@ int main(int argc, char const *argv[])
                                 instr_12.data_mem_select1 = 0;
                             else
                                 instr_12.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_12.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_12.Operand_Addr = 258;
                             else
                                 instr_12.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")" << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -2108,15 +2115,15 @@ int main(int argc, char const *argv[])
                                 instr_12.data_mem_select2 = 0;
                             else
                                 instr_12.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_12.T_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_12.T_Addr = 258;
                             else
                                 instr_12.T_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")" << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2157,15 +2164,15 @@ int main(int argc, char const *argv[])
                                 instr_5.data_mem_select = 0;
                             else
                                 instr_5.data_mem_select = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_5.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_5.Operand_Addr = 258;
                             else
                                 instr_5.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")" << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2205,15 +2212,16 @@ int main(int argc, char const *argv[])
                                 instr_6.data_mem_select1 = 0;
                             else
                                 instr_6.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_6.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_6.Operand_Addr = 258;
                             else
                                 instr_6.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2240,15 +2248,16 @@ int main(int argc, char const *argv[])
                                 instr_6.data_mem_select2 = 0;
                             else
                                 instr_6.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_6.F_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_6.F_Addr = 258;
                             else
                                 instr_6.F_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -2285,15 +2294,16 @@ int main(int argc, char const *argv[])
                                 instr_7.data_mem_select1 = 0;
                             else
                                 instr_7.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_7.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_7.Operand_Addr = 258;
                             else
                                 instr_7.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -2319,15 +2329,16 @@ int main(int argc, char const *argv[])
                                 instr_7.data_mem_select2 = 0;
                             else
                                 instr_7.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_7.T_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_7.T_Addr = 258;
                             else
                                 instr_7.T_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2352,15 +2363,16 @@ int main(int argc, char const *argv[])
                                 instr_7.data_mem_select3 = 0;
                             else
                                 instr_7.data_mem_select3 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[2] == "ld")
-                                instr_7.F_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[2] == "rst_n")
+                                instr_7.F_Addr = 258;
                             else
                                 instr_7.F_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[2] == -2)
@@ -2397,15 +2409,16 @@ int main(int argc, char const *argv[])
                                 instr_8.data_mem_select1 = 0;
                             else
                                 instr_8.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_8.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_8.Operand_Addr = 258;
                             else
                                 instr_8.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -2431,15 +2444,16 @@ int main(int argc, char const *argv[])
                                 instr_8.data_mem_select2 = 0;
                             else
                                 instr_8.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_8.T_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_8.T_Addr = 258;
                             else
                                 instr_8.T_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2481,15 +2495,16 @@ int main(int argc, char const *argv[])
                                 instr_13.data_mem_select1 = 0;
                             else
                                 instr_13.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_13.Operand_Addr1 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_13.Operand_Addr1 = 258;
                             else
                                 instr_13.Operand_Addr1 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2516,15 +2531,16 @@ int main(int argc, char const *argv[])
                                 instr_13.data_mem_select2 = 0;
                             else
                                 instr_13.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_13.Operand_Addr2 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_13.Operand_Addr2 = 258;
                             else
                                 instr_13.Operand_Addr2 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -2563,15 +2579,16 @@ int main(int argc, char const *argv[])
                                 instr_14.data_mem_select1 = 0;
                             else
                                 instr_14.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_14.Operand_Addr1 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_14.Operand_Addr1 = 258;
                             else
                                 instr_14.Operand_Addr1 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2598,15 +2615,16 @@ int main(int argc, char const *argv[])
                                 instr_14.data_mem_select2 = 0;
                             else
                                 instr_14.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[2] == "ld")
-                                instr_14.Operand_Addr2 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[2] == "rst_n")
+                                instr_14.Operand_Addr2 = 258;
                             else
                                 instr_14.Operand_Addr2 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[2] == -2)
@@ -2632,15 +2650,16 @@ int main(int argc, char const *argv[])
                                 instr_14.data_mem_select3 = 0;
                             else
                                 instr_14.data_mem_select3 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_14.T2_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_14.T2_Addr = 258;
                             else
                                 instr_14.T2_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -2677,15 +2696,16 @@ int main(int argc, char const *argv[])
                                 instr_15.data_mem_select1 = 0;
                             else
                                 instr_15.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_15.Operand_Addr1 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_15.Operand_Addr1 = 258;
                             else
                                 instr_15.Operand_Addr1 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -2711,15 +2731,16 @@ int main(int argc, char const *argv[])
                                 instr_15.data_mem_select2 = 0;
                             else
                                 instr_15.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_15.T1_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_15.T1_Addr = 258;
                             else
                                 instr_15.T1_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2744,15 +2765,16 @@ int main(int argc, char const *argv[])
                                 instr_15.data_mem_select3 = 0;
                             else
                                 instr_15.data_mem_select3 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[2] == "ld")
-                                instr_15.Operand_Addr2 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[2] == "rst_n")
+                                instr_15.Operand_Addr2 = 258;
                             else
                                 instr_15.Operand_Addr2 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[2] == -2)
@@ -2791,15 +2813,16 @@ int main(int argc, char const *argv[])
                                 instr_16.data_mem_select1 = 0;
                             else
                                 instr_16.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_16.Operand_Addr1 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_16.Operand_Addr1 = 258;
                             else
                                 instr_16.Operand_Addr1 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -2825,15 +2848,16 @@ int main(int argc, char const *argv[])
                                 instr_16.data_mem_select2 = 0;
                             else
                                 instr_16.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_16.T1_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_16.T1_Addr = 258;
                             else
                                 instr_16.T1_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -2858,15 +2882,16 @@ int main(int argc, char const *argv[])
                                 instr_16.data_mem_select3 = 0;
                             else
                                 instr_16.data_mem_select3 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[3] == "ld")
-                                instr_16.Operand_Addr2 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[3] == "rst_n")
+                                instr_16.Operand_Addr2 = 258;
                             else
                                 instr_16.Operand_Addr2 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[3] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[3] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[3] == -2)
@@ -2892,15 +2917,16 @@ int main(int argc, char const *argv[])
                                 instr_16.data_mem_select4 = 0;
                             else
                                 instr_16.data_mem_select4 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[2] == "ld")
-                                instr_16.T2_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[2] == "rst_n")
+                                instr_16.T2_Addr = 258;
                             else
                                 instr_16.T2_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[2] == -2)
@@ -3109,15 +3135,18 @@ int main(int argc, char const *argv[])
                         get_res_instr_pos.push_back(it->second);
                         instr_start_pos.push_back(it->second);
                     }
-                    for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
+                    if (instr_start_pos.size() >= 1)
                     {
-                        if (*it == *(it - 1))
+                        for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
                         {
-                            *it += 1;
-                        }
-                        else if (*it < *(it - 1))
-                        {
-                            *it += (*(it - 1) - *it + 1);
+                            if (*it == *(it - 1))
+                            {
+                                *it += 1;
+                            }
+                            else if (*it < *(it - 1))
+                            {
+                                *it += (*(it - 1) - *it + 1);
+                            }
                         }
                     }
                     config_instr_pos = instr_start_pos;
@@ -3167,15 +3196,16 @@ int main(int argc, char const *argv[])
                                 instr_12.data_mem_select1 = 0;
                             else
                                 instr_12.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_12.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_12.Operand_Addr = 258;
                             else
                                 instr_12.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -3207,15 +3237,16 @@ int main(int argc, char const *argv[])
                                 instr_12.data_mem_select2 = 0;
                             else
                                 instr_12.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_12.T_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_12.T_Addr = 258;
                             else
                                 instr_12.T_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -3297,15 +3328,18 @@ int main(int argc, char const *argv[])
                     get_res_instr_pos.push_back(it->second);
                     instr_start_pos.push_back(it->second);
                 }
-                for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
+                if (instr_start_pos.size() >= 1)
                 {
-                    if (*it == *(it - 1))
+                    for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
                     {
-                        *it += 1;
-                    }
-                    else if (*it < *(it - 1))
-                    {
-                        *it += (*(it - 1) - *it + 1);
+                        if (*it == *(it - 1))
+                        {
+                            *it += 1;
+                        }
+                        else if (*it < *(it - 1))
+                        {
+                            *it += (*(it - 1) - *it + 1);
+                        }
                     }
                 }
                 config_instr_pos = instr_start_pos;
@@ -3357,15 +3391,16 @@ int main(int argc, char const *argv[])
                                 instr_5.data_mem_select = 0;
                             else
                                 instr_5.data_mem_select = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_5.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_5.Operand_Addr = 258;
                             else
                                 instr_5.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -3412,15 +3447,16 @@ int main(int argc, char const *argv[])
                                 instr_6.data_mem_select1 = 0;
                             else
                                 instr_6.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_6.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_6.Operand_Addr = 258;
                             else
                                 instr_6.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -3453,15 +3489,16 @@ int main(int argc, char const *argv[])
                                 instr_6.data_mem_select2 = 0;
                             else
                                 instr_6.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_6.F_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_6.F_Addr = 258;
                             else
                                 instr_6.F_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -3504,15 +3541,16 @@ int main(int argc, char const *argv[])
                                 instr_7.data_mem_select1 = 0;
                             else
                                 instr_7.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_7.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_7.Operand_Addr = 258;
                             else
                                 instr_7.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -3538,15 +3576,16 @@ int main(int argc, char const *argv[])
                                 instr_7.data_mem_select2 = 0;
                             else
                                 instr_7.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_7.T_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_7.T_Addr = 258;
                             else
                                 instr_7.T_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -3577,15 +3616,16 @@ int main(int argc, char const *argv[])
                                 instr_7.data_mem_select3 = 0;
                             else
                                 instr_7.data_mem_select3 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[2] == "ld")
-                                instr_7.F_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[2] == "rst_n")
+                                instr_7.F_Addr = 258;
                             else
                                 instr_7.F_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[2] == -2)
@@ -3628,15 +3668,16 @@ int main(int argc, char const *argv[])
                                 instr_8.data_mem_select1 = 0;
                             else
                                 instr_8.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_8.Operand_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_8.Operand_Addr = 258;
                             else
                                 instr_8.Operand_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -3668,15 +3709,16 @@ int main(int argc, char const *argv[])
                                 instr_8.data_mem_select2 = 0;
                             else
                                 instr_8.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_8.T_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_8.T_Addr = 258;
                             else
                                 instr_8.T_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -3759,17 +3801,20 @@ int main(int argc, char const *argv[])
                     get_res_instr_pos.push_back(it->second);
                     instr_start_pos.push_back(it->second);
                 }
-                for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
+                if (instr_start_pos.size() >= 1)
                 {
-                    if (*it == *(it - 1))
+                    for (vector<int>::iterator it = instr_start_pos.begin() + 1; it != instr_start_pos.end(); it++)
                     {
-                        *it += 1;
+                        if (*it == *(it - 1))
+                        {
+                            *it += 1;
+                        }
+                        else if (*it < *(it - 1))
+                        {
+                            *it += (*(it - 1) - *it + 1);
+                        }
                     }
-                    else if (*it < *(it - 1))
-                    {
-                        *it += (*(it - 1) - *it + 1);
-                    }
-                }
+                }                
                 config_instr_pos = instr_start_pos;
                 for (int i = 0; i < _cur_in_net_from_id.size(); i++)
                 {
@@ -3819,15 +3864,16 @@ int main(int argc, char const *argv[])
                                 instr_13.data_mem_select1 = 0;
                             else
                                 instr_13.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_13.Operand_Addr1 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_13.Operand_Addr1 = 258;
                             else
                                 instr_13.Operand_Addr1 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -3860,15 +3906,16 @@ int main(int argc, char const *argv[])
                                 instr_13.data_mem_select2 = 0;
                             else
                                 instr_13.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_13.Operand_Addr2 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_13.Operand_Addr2 = 258;
                             else
                                 instr_13.Operand_Addr2 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -3913,15 +3960,16 @@ int main(int argc, char const *argv[])
                                 instr_14.data_mem_select1 = 0;
                             else
                                 instr_14.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_14.Operand_Addr1 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_14.Operand_Addr1 = 258;
                             else
                                 instr_14.Operand_Addr1 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -3954,15 +4002,16 @@ int main(int argc, char const *argv[])
                                 instr_14.data_mem_select2 = 0;
                             else
                                 instr_14.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[2] == "ld")
-                                instr_14.Operand_Addr2 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[2] == "rst_n")
+                                instr_14.Operand_Addr2 = 258;
                             else
                                 instr_14.Operand_Addr2 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[2] == -2)
@@ -3994,15 +4043,16 @@ int main(int argc, char const *argv[])
                                 instr_14.data_mem_select3 = 0;
                             else
                                 instr_14.data_mem_select3 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_14.T2_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_14.T2_Addr = 258;
                             else
                                 instr_14.T2_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -4045,15 +4095,16 @@ int main(int argc, char const *argv[])
                                 instr_15.data_mem_select1 = 0;
                             else
                                 instr_15.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_15.Operand_Addr1 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_15.Operand_Addr1 = 258;
                             else
                                 instr_15.Operand_Addr1 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -4085,15 +4136,16 @@ int main(int argc, char const *argv[])
                                 instr_15.data_mem_select2 = 0;
                             else
                                 instr_15.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_15.T1_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_15.T1_Addr = 258;
                             else
                                 instr_15.T1_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -4124,15 +4176,16 @@ int main(int argc, char const *argv[])
                                 instr_15.data_mem_select3 = 0;
                             else
                                 instr_15.data_mem_select3 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[2] == "ld")
-                                instr_15.Operand_Addr2 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[2] == "rst_n")
+                                instr_15.Operand_Addr2 = 258;
                             else
                                 instr_15.Operand_Addr2 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[2] == -2)
@@ -4177,15 +4230,16 @@ int main(int argc, char const *argv[])
                                 instr_16.data_mem_select1 = 0;
                             else
                                 instr_16.data_mem_select1 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[1] == "ld")
-                                instr_16.Operand_Addr1 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[1] == "rst_n")
+                                instr_16.Operand_Addr1 = 258;
                             else
                                 instr_16.Operand_Addr1 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[1] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[1] == -2)
@@ -4217,15 +4271,16 @@ int main(int argc, char const *argv[])
                                 instr_16.data_mem_select2 = 0;
                             else
                                 instr_16.data_mem_select2 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[0] == "ld")
-                                instr_16.T1_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[0] == "rst_n")
+                                instr_16.T1_Addr = 258;
                             else
                                 instr_16.T1_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[0] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[0] == -2)
@@ -4256,15 +4311,16 @@ int main(int argc, char const *argv[])
                                 instr_16.data_mem_select3 = 0;
                             else
                                 instr_16.data_mem_select3 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[3] == "ld")
-                                instr_16.Operand_Addr2 = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[3] == "rst_n")
+                                instr_16.Operand_Addr2 = 258;
                             else
                                 instr_16.Operand_Addr2 = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[3] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[3] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[3] == -2)
@@ -4296,15 +4352,16 @@ int main(int argc, char const *argv[])
                                 instr_16.data_mem_select4 = 0;
                             else
                                 instr_16.data_mem_select4 = 1;
-                            // for input initial signal "ld" changing
-                            if (cur_dff.in_net_from_info[2] == "ld")
-                                instr_16.T2_Addr = MEM_DEPTH - 2;
+                            // for input initial signal "rst_n" changing
+                            if (cur_dff.in_net_from_info[2] == "rst_n")
+                                instr_16.T2_Addr = 258;
                             else
                                 instr_16.T2_Addr = MEM_DEPTH - 1;
                         }
                         else
                         {
-                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " in vcd file!" << endl;
+                            std::cout << "ERROR: No initial info of signal " << cur_dff.in_net_from_info[2] << " (DFF " << dff_num << ")"
+                                      << " in vcd file!" << endl;
                         }
                     }
                     else if (cur_dff.in_net_from_id[2] == -2)
@@ -4494,6 +4551,19 @@ int main(int argc, char const *argv[])
         assert(int(it->second.instr_mem.size()) == longest_instr1);
     }
 
+    // instruction for PC jumping and input changing
+    for (auto it = processors.begin(); it != processors.end(); it++)
+    {
+        Instr_3 instr_3;
+        instr_3.PC_Jump = 1;
+        instr_3.BM_Jump = 0;
+        instr_3.Node_Addr.push_back(it->first / N_PROCESSORS_PER_CLUSTER);
+        instr_3.Node_Addr.push_back(it->first % N_PROCESSORS_PER_CLUSTER);
+        instr_3.Static_Binary_Value = "1";
+        string lut_instr_3 = cat_instr_3(instr_3);
+        processors[it->first].instr_mem.insert(processors[it->first].instr_mem.end(), 1, lut_instr_3);
+    }
+
     auto end_ins = std::chrono::steady_clock::now();
     long duration_ins = std::chrono::duration_cast<std::chrono::milliseconds>(end_ins - start_ins).count();
     std::cout << "Successfully finished instruction generation. (" << duration_ins << "ms)" << endl;
@@ -4508,7 +4578,10 @@ int main(int argc, char const *argv[])
     for (auto it = processors.begin(); it != processors.end(); it++)
     {
         auto i = it->first;
-        string cur_instr_out = instr_out + "instrmem_" + to_string(i) + ".coe";
+        int cluster_num = (i / N_PROCESSORS_PER_CLUSTER) + 1;
+        int bp_num = (i % N_PROCESSORS_PER_CLUSTER) + 1;
+        // string cur_instr_out = instr_out + "instrmem_" + to_string(i) + ".coe";
+        string cur_instr_out = instr_out + "instrmem_" + to_string(cluster_num) + "_" + to_string(bp_num) + ".coe";
         ofstream outinstr(cur_instr_out);
         outinstr << "MEMORY_INITIALIZATION_RADIX = " << MEMORY_INITIALIZATION_RADIX << ";" << endl;
         outinstr << "MEMORY_INITIALIZATION_VECTOR =" << endl;
@@ -4528,7 +4601,7 @@ int main(int argc, char const *argv[])
         // outinstr << endl;
         outinstr.close();
     }
-    
+     
     ofstream outdir(out_dir);
     for (map<string, string>::iterator i = pin_bits.begin(); i != pin_bits.end(); i++)
     {
@@ -4542,6 +4615,10 @@ int main(int argc, char const *argv[])
                     outdir.setf(ios::left);
                     // outdir.width(10);
                     outdir << setw(30) << i->first;
+                    outdir << "LUT: ";
+                    // outdir.setf(ios::left);
+                    // outdir.width(10);
+                    outdir << setw(10) << it->first;
                     outdir << "Clutser: ";
                     // outdir.setf(ios::left);
                     // outdir.width(10);
@@ -4564,6 +4641,10 @@ int main(int argc, char const *argv[])
                     outdir.setf(ios::left);
                     // outdir.width(10);
                     outdir << setw(30) << i->first;
+                    outdir << "DFF: ";
+                    // outdir.setf(ios::left);
+                    // outdir.width(10);
+                    outdir << setw(10) << it->first;
                     outdir << "Clutser: ";
                     // outdir.setf(ios::left);
                     // outdir.width(10);
@@ -4576,6 +4657,62 @@ int main(int argc, char const *argv[])
                     // outdir.setf(ios::left);
                     // outdir.width(10);
                     outdir << setw(10) << it->second.res_pos_at_mem << endl;
+                }
+            }
+            if (assign_pairs.find(i->first) != assign_pairs.end())
+            {
+                string tmp = assign_pairs[i->first];
+                for (map<int, LutType>::iterator it = luts.begin(); it != luts.end(); it++)
+                {
+                    if (it->second.out_ports == tmp)
+                    {
+                        outdir << "Pin: ";
+                        outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(30) << i->first;
+                        outdir << "LUT: ";
+                        // outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(10) << it->first;
+                        outdir << "Clutser: ";
+                        // outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(10) << it->second.node_addr[0];
+                        outdir << "Processor: ";
+                        // outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(10) << it->second.node_addr[1];
+                        outdir << "Addr: ";
+                        // outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(10) << it->second.res_pos_at_mem << endl;
+                    }
+                }
+                for (auto it = dffs.begin(); it != dffs.end(); it++)
+                {
+                    if (it->second.dff_out == tmp)
+                    {
+                        outdir << "Pin: ";
+                        outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(30) << i->first;
+                        outdir << "DFF: ";
+                        // outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(10) << it->first;
+                        outdir << "Clutser: ";
+                        // outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(10) << it->second.node_addr[0];
+                        outdir << "Processor: ";
+                        // outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(10) << it->second.node_addr[1];
+                        outdir << "Addr: ";
+                        // outdir.setf(ios::left);
+                        // outdir.width(10);
+                        outdir << setw(10) << it->second.res_pos_at_mem << endl;
+                    }
                 }
             }
         }
