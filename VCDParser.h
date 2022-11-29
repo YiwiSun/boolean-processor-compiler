@@ -1,8 +1,5 @@
-
-
 #include <fstream>
 #include <sstream>
-
 
 #include "VCDTypes.h"
 #include "VCDValue.h"

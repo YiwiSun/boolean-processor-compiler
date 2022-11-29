@@ -28,8 +28,6 @@ Parser::~Parser() {
 }
 
 void Parser::parse_v(std::string& v_path){
-    auto start_v = std::chrono::steady_clock::now();
-    std::cout << "1. Executing netlist file parsing." << endl;
     ifstream inf(v_path);
     if(!inf) {
         std::cout << "File" << v_path << "Open Error!" <<endl;
@@ -95,11 +93,11 @@ void Parser::parse_v(std::string& v_path){
             line.erase(line.find_last_not_of(" ") + 1);
             std::string new_line = line;
             full_line = full_line + " " + new_line;
-            if(new_line.size() > 0 && new_line[new_line.size() - 1] == ';') {
+            if(new_line.size() > 0 && new_line[new_line.size() - 1] == ';') 
+            {
                 tmp = Split(full_line, " \t\r\n");
                 full_line = "";
                 end_of_line_found = false;
-
                 if(tmp[0] == "input" || tmp[0] == "output" || tmp[0] == "inout" || tmp[0] == "wire" || tmp[0] == "reg") {
                     Pin cur_pin;
                     // multiple bits pin
@@ -113,7 +111,8 @@ void Parser::parse_v(std::string& v_path){
                         else
                             tmp_name = tmp[2];    
                         cur_pin.name = tmp_name; 
-                        if(pins.find(cur_pin.name) != pins.end()) {
+                        if(pins.find(cur_pin.name) != pins.end()) 
+                        {
                             assert(pins.find(cur_pin.name)->second.type == "input" || pins.find(cur_pin.name)->second.type == "output" || pins.find(cur_pin.name)->second.type == "inout");
                             continue;
                         }                
@@ -121,7 +120,6 @@ void Parser::parse_v(std::string& v_path){
                         cur_pin.rindex = stoi(tmp[1].substr(tmp[1].find(":") + 1, tmp[1].find("]") - tmp[1].find(":") - 1));                      
                         cur_pin.size = max(cur_pin.lindex, cur_pin.rindex) - min(cur_pin.lindex, cur_pin.rindex) + 1;                     
                         pins[tmp_name] = cur_pin;
-
                         int i = cur_pin.lindex;
                         for(int j = 0; j < cur_pin.size; j++) {
                             std::string _name = tmp_name + "[" + to_string(i) + "]";
@@ -153,329 +151,15 @@ void Parser::parse_v(std::string& v_path){
                         cur_pin.rindex = -1;                       
                         cur_pin.size = 1;                       
                         pins[tmp_name] = cur_pin;
-                        // pin_bits.push_back(tmp_name);
                         pin_bits.insert(pair<string, string>(tmp_name, cur_pin.type));
                     }
-                    // debug
-                    // std::cout << "pin name: ";
-                    // std::cout.setf(ios::left);
-                    // std::cout.width(10);
-                    // std::cout << cur_pin.name;
-                    // std::cout << "type: ";
-                    // std::cout.setf(ios::left);
-                    // std::cout.width(10);
-                    // std::cout << cur_pin.type << "   ---";
-                    // std::cout << "lindex: " << cur_pin.lindex << " ";
-                    // std::cout << "rindex: " << cur_pin.rindex << " ";
-                    // std::cout << "size: " << cur_pin.size << endl;
                 }
                 
                 else if(tmp[0] == "assign") 
                 {
                     auto jdg = find(tmp.begin(), tmp.end(), ">>");
-                    // pinbitValue parsing
-                    // if (jdg == tmp.end())
-                    // {
-                    //     if(tmp.size() == 2) {
-                    //         assert(tmp[1].find("=") != std::string::npos);
-                    //         assert(tmp[1][tmp[1].size() - 1] == ';');
-                    //         std::string left = tmp[1].substr(0, tmp[1].find("="));
-                    //         std::string right = tmp[1].substr(tmp[1].find("=") + 1, tmp[1].size() - tmp[1].find("=") - 1);
-                    //         if(right == "1\'b1" || right == "1\'b0") {
-                    //             TimedValues* tvs = new TimedValues();
-                    //             TimedValue t_val;
-                    //             t_val.t = 0;
-                    //             t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                    //             tvs->push_back(t_val);
-                    //             pinbitValues[left] = tvs;
-                    //         }
-                    //         else {
-                    //             assign_pairs[left] = right;
-                    //         }
-                    //     }
-                    //     else if(tmp.size() == 3) {
-                    //         std::string left, right;
-                    //         assert((tmp[1].find("=") != std::string::npos) || (tmp[2].find("=") != std::string::npos));
-                    //         assert(tmp[2][tmp[2].size() - 1] == ';'); 
-                    //         if (tmp[1].find("=") != std::string::npos) {   
-                    //             left = tmp[1].substr(0, tmp[1].find("="));
-                    //             right = tmp[2].substr(0, tmp[2].size() - 1);
-                    //         }
-                    //         else if (tmp[2].find("=") != std::string::npos) {
-                    //             left = tmp[1];
-                    //             right = tmp[2].substr(tmp[2].find("=") + 1, tmp[2].size() - tmp[2].find("=") - 1);
-                    //         }
-                    //         if (right == "1\'b1" || right == "1\'b0") { 
-                    //             TimedValues *tvs = new TimedValues();
-                    //             TimedValue t_val;
-                    //             t_val.t = 0;
-                    //             t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                    //             tvs->push_back(t_val);
-                    //             pinbitValues[left] = tvs;
-                    //         }
-                    //         else {
-                    //             assign_pairs[left] = right;
-                    //         }
-                    //     }
-                    //     else if(tmp.size() == 4 || tmp.size() == 5) {
-                    //         assert(tmp[2] == "=");
-                    //         assert(tmp[tmp.size() - 1][tmp[tmp.size() - 1].size() - 1] == ';');
-                    //         std::string left = tmp[1];
-                    //         std::string right = (tmp.size() == 4) ? tmp[3].substr(0, tmp[3].size() - 1) : tmp[3];
-                    //         if (right == "1\'b1" || right == "1\'b0") {
-                    //             TimedValues *tvs = new TimedValues();
-                    //             TimedValue t_val;
-                    //             t_val.t = 0;
-                    //             t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                    //             tvs->push_back(t_val);
-                    //             pinbitValues[left] = tvs;
-                    //         }
-                    //         else {
-                    //             assign_pairs[left] = right;
-                    //         }
-                    //     }
-                    //     else {
-                    //         if (tmp[2] == "=")
-                    //         {
-                    //             std::string left = tmp[1];
-                    //             assert(tmp[5] == ";");
-                    //             std::string right = tmp[3] + tmp[4];
-                    //             if (right == "1\'b1" || right == "1\'b0")
-                    //             {
-                    //                 TimedValues *tvs = new TimedValues();
-                    //                 TimedValue t_val;
-                    //                 t_val.t = 0;
-                    //                 t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                    //                 tvs->push_back(t_val);
-                    //                 pinbitValues[left] = tvs;
-                    //             }
-                    //             else
-                    //             {
-                    //                 assign_pairs[left] = right;
-                    //             }
-                    //         }
-                    //         else
-                    //         {
-                    //             assert(tmp[3] == "=");
-                    //             std::string left = tmp[1] + tmp[2];
-                    //             assert(tmp[tmp.size() - 1] == ";");
-                    //             std::string right = (tmp.size() == 6) ? tmp[4] : tmp[4] + tmp[5];
-                    //             if (right == "1\'b1" || right == "1\'b0")
-                    //             {
-                    //                 TimedValues *tvs = new TimedValues();
-                    //                 TimedValue t_val;
-                    //                 t_val.t = 0;
-                    //                 t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                    //                 tvs->push_back(t_val);
-                    //                 pinbitValues[left] = tvs;
-                    //             }
-                    //             else
-                    //             {
-                    //                 assign_pairs[left] = right;
-                    //             }
-                    //         }
-                    //     }
-                    // }
                     if (jdg == tmp.end())
-                    {
-                        // if (tmp[2] == "=")
-                        //     assign_sig = tmp[1];
-                        // else
-                        // {
-                        //     assert(tmp[3] == "=");
-                        //     assign_sig = tmp[1] + tmp[2];
-                        // }
-                        // if (pin_bits.find(assign_sig) != pin_bits.end())
-                        // {
-                        //     // if (tmp.size() == 2)
-                        //     // {
-                        //     //     assert(tmp[1].find("=") != std::string::npos);
-                        //     //     assert(tmp[1][tmp[1].size() - 1] == ';');
-                        //     //     std::string left = tmp[1].substr(0, tmp[1].find("="));
-                        //     //     std::string right = tmp[1].substr(tmp[1].find("=") + 1, tmp[1].size() - tmp[1].find("=") - 1);
-                        //     //     if (right == "1\'b1" || right == "1\'b0")
-                        //     //     {
-                        //     //         TimedValues *tvs = new TimedValues();
-                        //     //         TimedValue t_val;
-                        //     //         t_val.t = 0;
-                        //     //         t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                        //     //         tvs->push_back(t_val);
-                        //     //         pinbitValues[left] = tvs;
-                        //     //     }
-                        //     //     else
-                        //     //     {
-                        //     //         assign_pairs[left] = right;
-                        //     //     }
-                        //     // }
-                        //     // else if (tmp.size() == 3)
-                        //     // {
-                        //     //     std::string left, right;
-                        //     //     assert((tmp[1].find("=") != std::string::npos) || (tmp[2].find("=") != std::string::npos));
-                        //     //     assert(tmp[2][tmp[2].size() - 1] == ';');
-                        //     //     if (tmp[1].find("=") != std::string::npos)
-                        //     //     {
-                        //     //         left = tmp[1].substr(0, tmp[1].find("="));
-                        //     //         right = tmp[2].substr(0, tmp[2].size() - 1);
-                        //     //     }
-                        //     //     else if (tmp[2].find("=") != std::string::npos)
-                        //     //     {
-                        //     //         left = tmp[1];
-                        //     //         right = tmp[2].substr(tmp[2].find("=") + 1, tmp[2].size() - tmp[2].find("=") - 1);
-                        //     //     }
-                        //     //     if (right == "1\'b1" || right == "1\'b0")
-                        //     //     {
-                        //     //         TimedValues *tvs = new TimedValues();
-                        //     //         TimedValue t_val;
-                        //     //         t_val.t = 0;
-                        //     //         t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                        //     //         tvs->push_back(t_val);
-                        //     //         pinbitValues[left] = tvs;
-                        //     //     }
-                        //     //     else
-                        //     //     {
-                        //     //         assign_pairs[left] = right;
-                        //     //     }
-                        //     // }
-                        //     // if (tmp.size() == 4 || tmp.size() == 5)
-                        //     // {
-                        //     //     assert(tmp[2] == "=");
-                        //     //     assert(tmp[tmp.size() - 1][tmp[tmp.size() - 1].size() - 1] == ';');
-                        //     //     std::string left = tmp[1];
-                        //     //     std::string right = (tmp.size() == 4) ? tmp[3].substr(0, tmp[3].size() - 1) : tmp[3];
-                        //     //     if (right == "1\'b1" || right == "1\'b0" || right == "1\'bx")
-                        //     //     {
-                        //     //         TimedValues *tvs = new TimedValues();
-                        //     //         TimedValue t_val;
-                        //     //         t_val.t = 0;
-                        //     //         t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                        //     //         tvs->push_back(t_val);
-                        //     //         pinbitValues[left] = tvs;
-                        //     //     }
-                        //     //     else
-                        //     //     {
-                        //     //         assign_pairs[left] = right;
-                        //     //     }
-                        //     // }
-                        //     // else
-                        //     // {
-                        //     //     if (tmp[2] == "=")
-                        //     //     {
-                        //     //         std::string left = tmp[1];
-                        //     //         assert(tmp[5] == ";");
-                        //     //         std::string right = tmp[3] + tmp[4];
-                        //     //         if (right == "1\'b1" || right == "1\'b0" || right == "1\'bx")
-                        //     //         {
-                        //     //             TimedValues *tvs = new TimedValues();
-                        //     //             TimedValue t_val;
-                        //     //             t_val.t = 0;
-                        //     //             t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                        //     //             tvs->push_back(t_val);
-                        //     //             pinbitValues[left] = tvs;
-                        //     //         }
-                        //     //         else
-                        //     //         {
-                        //     //             assign_pairs[left] = right;
-                        //     //         }
-                        //     //     }
-                        //     //     else
-                        //     //     {
-                        //     //         assert(tmp[3] == "=");
-                        //     //         std::string left = tmp[1] + tmp[2];
-                        //     //         assert(tmp[tmp.size() - 1] == ";");
-                        //     //         std::string right = (tmp.size() == 6) ? tmp[4] : tmp[4] + tmp[5];
-                        //     //         if (right == "1\'b1" || right == "1\'b0" || right == "1\'bx")
-                        //     //         {
-                        //     //             TimedValues *tvs = new TimedValues();
-                        //     //             TimedValue t_val;
-                        //     //             t_val.t = 0;
-                        //     //             t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                        //     //             tvs->push_back(t_val);
-                        //     //             pinbitValues[left] = tvs;
-                        //     //         }
-                        //     //         else
-                        //     //         {
-                        //     //             assign_pairs[left] = right;
-                        //     //         }
-                        //     //     }
-                        //     // }
-                        //     assert(tmp.size() <= 7 && tmp.size() >= 4);
-                        //     if (tmp[2] == "=")
-                        //     {
-                        //         assert(tmp.size() <= 6 && tmp.size() >= 4);
-                        //         std::string left = tmp[1];
-                        //         std::string right;
-                        //         if (tmp.size() == 4)
-                        //         {
-                        //             assert(tmp[3][tmp[3].size() - 1] == ';');
-                        //             right = tmp[3].substr(0, tmp[3].size() - 1);                                   
-                        //         }
-                        //         else if (tmp.size() == 5)
-                        //         {
-                        //             assert(tmp[4] == ";" || tmp[4][tmp[4].size() - 1] == ';');
-                        //             if (tmp[4] == ";")
-                        //                 right = tmp[3];
-                        //             else
-                        //                 right = tmp[3] + tmp[4].substr(0, tmp[4].size() - 1);
-                        //         }
-                        //         else if (tmp.size() == 6)
-                        //         {
-                        //             assert(tmp[5] == ";");
-                        //             right = tmp[3] + tmp[4];
-                        //         }
-                        //         if (right == "1\'b1" || right == "1\'b0" || right == "1\'bx")
-                        //         {
-                        //             TimedValues *tvs = new TimedValues();
-                        //             TimedValue t_val;
-                        //             t_val.t = 0;
-                        //             t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                        //             tvs->push_back(t_val);
-                        //             pinbitValues[left] = tvs;
-                        //         }
-                        //         else
-                        //         {
-                        //             assign_pairs[left] = right;
-                        //         }
-                        //     }
-                        //     else
-                        //     {
-                        //         assert(tmp[3] == "=");
-                        //         assert(tmp.size() <= 7 && tmp.size() >= 5);                              
-                        //         std::string left = tmp[1] + tmp[2];
-                        //         std::string right;
-                        //         if (tmp.size() == 5)
-                        //         {
-                        //             assert(tmp[4][tmp[4].size() - 1] == ';');
-                        //             right = tmp[4].substr(0, tmp[4].size() - 1);
-                        //         }
-                        //         else if (tmp.size() == 6)
-                        //         {
-                        //             assert(tmp[5] == ";" || tmp[5][tmp[5].size() - 1] == ';');
-                        //             if (tmp[5] == ";")
-                        //                 right = tmp[4];
-                        //             else
-                        //                 right = tmp[4] + tmp[5].substr(0, tmp[5].size() - 1);
-                        //         }
-                        //         else if (tmp.size() == 7)
-                        //         {
-                        //             assert(tmp[6] == ";");
-                        //             right = tmp[4] + tmp[5];
-                        //         }                                
-                        //         if (right == "1\'b1" || right == "1\'b0" || right == "1\'bx")
-                        //         {
-                        //             TimedValues *tvs = new TimedValues();
-                        //             TimedValue t_val;
-                        //             t_val.t = 0;
-                        //             t_val.value = (right == "1\'b1" ? VCD_1 : VCD_0);
-                        //             tvs->push_back(t_val);
-                        //             pinbitValues[left] = tvs;
-                        //         }
-                        //         else
-                        //         {
-                        //             assign_pairs[left] = right;
-                        //         }
-                        //     }
-                        // }
-                        
+                    {  
                         if ((tmp[2] == "=" && pin_bits.find(tmp[1]) != pin_bits.end()) || (tmp[3] == "=" && pin_bits.find(tmp[1] + tmp[2]) != pin_bits.end()))
                         {
                             assert(tmp.size() <= 7 && tmp.size() >= 4);
@@ -561,682 +245,6 @@ void Parser::parse_v(std::string& v_path){
                         }
                         else
                         {
-                            // assert((pins.find(assign_sig) != pins.end()) || (pins.find(tmp[1]) != pins.end()));
-                            // auto eql = find(tmp.begin(), tmp.end(), "=");
-                            // if ((tmp.begin() + distance(tmp.begin(), eql) + 1)->find("'") != string::npos)
-                            // {
-                            //     if (assign_sig.find(':') == string::npos || assign_sig.find('[') == string::npos || assign_sig.find(']') == string::npos)
-                            //     {
-                            //         string value;
-                            //         if ((tmp.begin() + distance(tmp.begin(), eql) + 1)->find(";") == string::npos)
-                            //             value = *(tmp.begin() + distance(tmp.begin(), eql) + 1);
-                            //         else
-                            //             value = (tmp.begin() + distance(tmp.begin(), eql) + 1)->substr(0, (tmp.begin() + distance(tmp.begin(), eql) + 1)->size() - 1);
-                            //         int value_width = stoi(value.substr(0, value.find("'")).c_str());                                  
-                            //         string value_value_hex = value.substr(value.find("h") + 1, value.size() - value.find("h") - 1);
-                            //         string value_value_bin;
-                            //         // if (value_value_hex.size() == 1)
-                            //         //     value_value_bin = value_value_hex;
-                            //         // else
-                            //         //     value_value_bin = HextoBinary_x(value_value_hex);
-                            //         string tmp_value_value_bin = HextoBinary_x(value_value_hex);
-                            //         value_value_bin = tmp_value_value_bin.substr(tmp_value_value_bin.length() - value_width);
-                            //         vector<string> assign_sig_bit;                           
-                            //         int lin = pins[assign_sig].lindex;
-                            //         for (int j = 0; j < pins[assign_sig].size; j++)
-                            //         {
-                            //             std::string _name = assign_sig + "[" + to_string(lin) + "]";
-                            //             assign_sig_bit.push_back(_name);
-                            //             if (pins[assign_sig].lindex > pins[assign_sig].rindex)
-                            //             {
-                            //                 lin--;
-                            //             }
-                            //             else
-                            //             {
-                            //                 lin++;
-                            //             }
-                            //         }
-                            //         assert(assign_sig_bit.size() == value_width);
-                            //         for (int range = 0; range < assign_sig_bit.size(); range++)
-                            //         {
-                            //             if (value_value_bin[range] == '1' || value_value_bin[range] == '0' || value_value_bin[range] == 'x')
-                            //             {
-                            //                 TimedValues *tvs = new TimedValues();
-                            //                 TimedValue t_val;
-                            //                 t_val.t = 0;
-                            //                 t_val.value = (value_value_bin[range] == '1' ? VCD_1 : VCD_0);
-                            //                 tvs->push_back(t_val);
-                            //                 pinbitValues[assign_sig_bit[range]] = tvs;
-                            //             }
-                            //         }                                   
-                            //     }
-                            //     else
-                            //     {
-                            //         string value;
-                            //         if ((tmp.begin() + distance(tmp.begin(), eql) + 1)->find(";") == string::npos)
-                            //             value = *(tmp.begin() + distance(tmp.begin(), eql) + 1);
-                            //         else
-                            //             value = (tmp.begin() + distance(tmp.begin(), eql) + 1)->substr(0, (tmp.begin() + distance(tmp.begin(), eql) + 1)->size() - 1);
-                            //         int value_width = stoi(value.substr(0, value.find("'")).c_str());
-                            //         string value_value_hex = value.substr(value.find("h") + 1, value.size() - value.find("h") - 1);
-                            //         string value_value_bin;
-                            //         // if (value_value_hex.size() == 1)
-                            //         //     value_value_bin = value_value_hex;
-                            //         // else
-                            //         //     value_value_bin = HextoBinary_x(value_value_hex);
-                            //         string tmp_value_value_bin = HextoBinary_x(value_value_hex);
-                            //         value_value_bin = tmp_value_value_bin.substr(tmp_value_value_bin.length() - value_width);
-                            //         vector<string> assign_sig_bit;
-                            //         volatile int index = 0;
-                            //         int count = 0;
-                            //         int _index = 0;
-                            //         while ((_index = assign_sig.find("[", _index)) < assign_sig.length())
-                            //         {
-                            //             count++;
-                            //             _index++;
-                            //             index = _index;
-                            //         }
-                            //         if (count == 2)
-                            //         {
-                            //             int index2 = 0;
-                            //             int count2 = 0;
-                            //             int _index2 = 0;
-                            //             while ((_index2 = assign_sig.find("]", _index2)) < assign_sig.length())
-                            //             {
-                            //                 count2++;
-                            //                 _index2++;
-                            //                 index2 = _index2;
-                            //             }
-                            //             assert(count2 == 2);
-                            //             int left = stoi(assign_sig.substr(index, assign_sig.find(":") - (index - 1) - 1));
-                            //             int right = stoi(assign_sig.substr(assign_sig.find(":") + 1, index2 - 1 - assign_sig.find(":") - 1));
-                            //             int len = max(left, right) - min(left, right) + 1;
-                            //             if (left > right)
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, index - 1 + 1) + to_string(left - i) + "]");
-                            //                 }
-                            //             }
-                            //             else
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, index - 1 + 1) + to_string(left + i) + "]");
-                            //                 }
-                            //             }
-                            //             for (int i = 0; i < assign_sig_bit.size(); i++)
-                            //             {
-                            //                 auto iter = pin_bits.find(assign_sig_bit[i]);
-                            //                 assert(iter != pin_bits.end());
-                            //             }
-                            //         }
-                            //         else
-                            //         {
-                            //             assert(count == 1);
-                            //             int left = stoi(assign_sig.substr(assign_sig.find("[") + 1, assign_sig.find(":") - assign_sig.find("[") - 1));
-                            //             int right = stoi(assign_sig.substr(assign_sig.find(":") + 1, assign_sig.find("]") - assign_sig.find(":") - 1));
-                            //             int len = max(left, right) - min(left, right) + 1;
-                            //             if (left > right)
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, assign_sig.find("[") + 1) + to_string(left - i) + "]");
-                            //                 }
-                            //             }
-                            //             else
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, assign_sig.find("[") + 1) + to_string(left + i) + "]");
-                            //                 }
-                            //             }
-                            //             for (int i = 0; i < assign_sig_bit.size(); i++)
-                            //             {
-                            //                 auto iter = pin_bits.find(assign_sig_bit[i]);
-                            //                 assert(iter != pin_bits.end());
-                            //             }
-                            //         }
-                            //         assert(assign_sig_bit.size() == value_width);
-                            //         for (int range = 0; range < assign_sig_bit.size(); range++)
-                            //         {
-                            //             if (value_value_bin[range] == '1' || value_value_bin[range] == '0' || value_value_bin[range] == 'x')
-                            //             {
-                            //                 TimedValues *tvs = new TimedValues();
-                            //                 TimedValue t_val;
-                            //                 t_val.t = 0;
-                            //                 t_val.value = (value_value_bin[range] == '1' ? VCD_1 : VCD_0);
-                            //                 tvs->push_back(t_val);
-                            //                 pinbitValues[assign_sig_bit[range]] = tvs;
-                            //             }
-                            //         }                                   
-                            //     }
-                            // }
-                            // else if ((tmp.begin() + distance(tmp.begin(), eql) + 1)->find("{") == string::npos)
-                            // {
-                            //     vector<string> assign_sig_bit;
-                            //     if (assign_sig.find(':') == string::npos)
-                            //     {                                                                      
-                            //         int lin = pins[assign_sig].lindex;
-                            //         for (int j = 0; j < pins[assign_sig].size; j++)
-                            //         {
-                            //             std::string _name = assign_sig + "[" + to_string(lin) + "]";
-                            //             assign_sig_bit.push_back(_name);
-                            //             if (pins[assign_sig].lindex > pins[assign_sig].rindex)
-                            //             {
-                            //                 lin--;
-                            //             }
-                            //             else
-                            //             {
-                            //                 lin++;
-                            //             }
-                            //         }                                                                  
-                            //     }
-                            //     else
-                            //     {
-                            //         volatile int index = 0;
-                            //         int count = 0;
-                            //         int _index = 0;
-                            //         while ((_index = assign_sig.find("[", _index)) < assign_sig.length())
-                            //         {
-                            //             count++;
-                            //             _index++;
-                            //             index = _index;
-                            //         }
-                            //         if (count == 2)
-                            //         {
-                            //             int index2 = 0;
-                            //             int count2 = 0;
-                            //             int _index2 = 0;
-                            //             while ((_index2 = assign_sig.find("]", _index2)) < assign_sig.length())
-                            //             {
-                            //                 count2++;
-                            //                 _index2++;
-                            //                 index2 = _index2;
-                            //             }
-                            //             assert(count2 == 2);
-                            //             int left = stoi(assign_sig.substr(index, assign_sig.find(":") - (index - 1) - 1));
-                            //             int right = stoi(assign_sig.substr(assign_sig.find(":") + 1, index2 - 1 - assign_sig.find(":") - 1));
-                            //             int len = max(left, right) - min(left, right) + 1;
-                            //             if (left > right)
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, index - 1 + 1) + to_string(left - i) + "]");
-                            //                 }
-                            //             }
-                            //             else
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, index - 1 + 1) + to_string(left + i) + "]");
-                            //                 }
-                            //             }
-                            //             for (int i = 0; i < assign_sig_bit.size(); i++)
-                            //             {
-                            //                 auto iter = pin_bits.find(assign_sig_bit[i]);
-                            //                 assert(iter != pin_bits.end());
-                            //             }
-                            //         }
-                            //         else
-                            //         {
-                            //             assert(count == 1);
-                            //             int left = stoi(assign_sig.substr(assign_sig.find("[") + 1, assign_sig.find(":") - assign_sig.find("[") - 1));
-                            //             int right = stoi(assign_sig.substr(assign_sig.find(":") + 1, assign_sig.find("]") - assign_sig.find(":") - 1));
-                            //             int len = max(left, right) - min(left, right) + 1;
-                            //             if (left > right)
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, assign_sig.find("[") + 1) + to_string(left - i) + "]");
-                            //                 }
-                            //             }
-                            //             else
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, assign_sig.find("[") + 1) + to_string(left + i) + "]");
-                            //                 }
-                            //             }
-                            //             for (int i = 0; i < assign_sig_bit.size(); i++)
-                            //             {
-                            //                 auto iter = pin_bits.find(assign_sig_bit[i]);
-                            //                 assert(iter != pin_bits.end());
-                            //             }
-                            //         }                                   
-                            //     }
-                            //     string assign_sig_right;
-                            //     vector<string> assign_sig_bit_right;
-                            //     if ((tmp.begin() + distance(tmp.begin(), eql) + 1)->find(";") != string::npos)
-                            //         assign_sig_right = (tmp.begin() + distance(tmp.begin(), eql) + 1)->substr(0, (tmp.begin() + distance(tmp.begin(), eql) + 1)->size() - 1);
-                            //     else if (*(tmp.begin() + distance(tmp.begin(), eql) + 2) == ";")
-                            //         assign_sig_right = *(tmp.begin() + distance(tmp.begin(), eql) + 1);
-                            //     else if ((tmp.begin() + distance(tmp.begin(), eql) + 2)->find(";") != string::npos)
-                            //         assign_sig_right = *(tmp.begin() + distance(tmp.begin(), eql) + 1) + (tmp.begin() + distance(tmp.begin(), eql) + 2)->substr(0, (tmp.begin() + distance(tmp.begin(), eql) + 2)->size() - 1);
-                            //     else if (*(tmp.begin() + distance(tmp.begin(), eql) + 3) == ";")
-                            //         assign_sig_right = *(tmp.begin() + distance(tmp.begin(), eql) + 1) + *(tmp.begin() + distance(tmp.begin(), eql) + 2);
-                            //     if (assign_sig_right.find(':') == string::npos)
-                            //     {
-                            //         int lin = pins[assign_sig_right].lindex;
-                            //         for (int j = 0; j < pins[assign_sig_right].size; j++)
-                            //         {
-                            //             std::string _name = assign_sig_right + "[" + to_string(lin) + "]";
-                            //             assign_sig_bit_right.push_back(_name);
-                            //             if (pins[assign_sig_right].lindex > pins[assign_sig_right].rindex)
-                            //             {
-                            //                 lin--;
-                            //             }
-                            //             else
-                            //             {
-                            //                 lin++;
-                            //             }
-                            //         }
-                            //     }
-                            //     else
-                            //     {
-                            //         volatile int index = 0;
-                            //         int count = 0;
-                            //         int _index = 0;
-                            //         while ((_index = assign_sig_right.find("[", _index)) < assign_sig_right.length())
-                            //         {
-                            //             count++;
-                            //             _index++;
-                            //             index = _index;
-                            //         }
-                            //         if (count == 2)
-                            //         {
-                            //             int index2 = 0;
-                            //             int count2 = 0;
-                            //             int _index2 = 0;
-                            //             while ((_index2 = assign_sig_right.find("]", _index2)) < assign_sig_right.length())
-                            //             {
-                            //                 count2++;
-                            //                 _index2++;
-                            //                 index2 = _index2;
-                            //             }
-                            //             assert(count2 == 2);
-                            //             int left = stoi(assign_sig_right.substr(index, assign_sig_right.find(":") - (index - 1) - 1));
-                            //             int right = stoi(assign_sig_right.substr(assign_sig_right.find(":") + 1, index2 - 1 - assign_sig_right.find(":") - 1));
-                            //             int len = max(left, right) - min(left, right) + 1;
-                            //             if (left > right)
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit_right.push_back(assign_sig_right.substr(0, index - 1 + 1) + to_string(left - i) + "]");
-                            //                 }
-                            //             }
-                            //             else
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit_right.push_back(assign_sig_right.substr(0, index - 1 + 1) + to_string(left + i) + "]");
-                            //                 }
-                            //             }
-                            //             for (int i = 0; i < assign_sig_bit_right.size(); i++)
-                            //             {
-                            //                 auto iter = pin_bits.find(assign_sig_bit_right[i]);
-                            //                 assert(iter != pin_bits.end());
-                            //             }
-                            //         }
-                            //         else
-                            //         {
-                            //             assert(count == 1);
-                            //             int left = stoi(assign_sig_right.substr(assign_sig_right.find("[") + 1, assign_sig_right.find(":") - assign_sig_right.find("[") - 1));
-                            //             int right = stoi(assign_sig_right.substr(assign_sig_right.find(":") + 1, assign_sig_right.find("]") - assign_sig_right.find(":") - 1));
-                            //             int len = max(left, right) - min(left, right) + 1;
-                            //             if (left > right)
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit_right.push_back(assign_sig_right.substr(0, assign_sig_right.find("[") + 1) + to_string(left - i) + "]");
-                            //                 }
-                            //             }
-                            //             else
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit_right.push_back(assign_sig_right.substr(0, assign_sig_right.find("[") + 1) + to_string(left + i) + "]");
-                            //                 }
-                            //             }
-                            //             for (int i = 0; i < assign_sig_bit_right.size(); i++)
-                            //             {
-                            //                 auto iter = pin_bits.find(assign_sig_bit_right[i]);
-                            //                 assert(iter != pin_bits.end());
-                            //             }
-                            //         }
-                            //     }
-                            //     assert(assign_sig_bit.size() == assign_sig_bit_right.size());
-                            //     for (int range = 0; range < assign_sig_bit.size(); range++)
-                            //     {
-                            //         assign_pairs[assign_sig_bit[range]] = assign_sig_bit_right[range];
-                            //     }
-                            // }
-                            // else
-                            // {
-                            //     assert(*(tmp.begin() + distance(tmp.begin(), eql) + 1) == "{");
-                            //     vector<string> assign_sig_bit;
-                            //     if (assign_sig.find(':') == string::npos)
-                            //     {
-                            //         int lin = pins[assign_sig].lindex;
-                            //         for (int j = 0; j < pins[assign_sig].size; j++)
-                            //         {
-                            //             std::string _name = assign_sig + "[" + to_string(lin) + "]";
-                            //             assign_sig_bit.push_back(_name);
-                            //             if (pins[assign_sig].lindex > pins[assign_sig].rindex)
-                            //             {
-                            //                 lin--;
-                            //             }
-                            //             else
-                            //             {
-                            //                 lin++;
-                            //             }
-                            //         }
-                            //     }
-                            //     else
-                            //     {
-                            //         volatile int index = 0;
-                            //         int count = 0;
-                            //         int _index = 0;
-                            //         while ((_index = assign_sig.find("[", _index)) < assign_sig.length())
-                            //         {
-                            //             count++;
-                            //             _index++;
-                            //             index = _index;
-                            //         }
-                            //         if (count == 2)
-                            //         {
-                            //             int index2 = 0;
-                            //             int count2 = 0;
-                            //             int _index2 = 0;
-                            //             while ((_index2 = assign_sig.find("]", _index2)) < assign_sig.length())
-                            //             {
-                            //                 count2++;
-                            //                 _index2++;
-                            //                 index2 = _index2;
-                            //             }
-                            //             assert(count2 == 2);
-                            //             int left = stoi(assign_sig.substr(index, assign_sig.find(":") - (index - 1) - 1));
-                            //             int right = stoi(assign_sig.substr(assign_sig.find(":") + 1, index2 - 1 - assign_sig.find(":") - 1));
-                            //             int len = max(left, right) - min(left, right) + 1;
-                            //             if (left > right)
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, index - 1 + 1) + to_string(left - i) + "]");
-                            //                 }
-                            //             }
-                            //             else
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, index - 1 + 1) + to_string(left + i) + "]");
-                            //                 }
-                            //             }
-                            //             for (int i = 0; i < assign_sig_bit.size(); i++)
-                            //             {
-                            //                 auto iter = pin_bits.find(assign_sig_bit[i]);
-                            //                 assert(iter != pin_bits.end());
-                            //             }
-                            //         }
-                            //         else
-                            //         {
-                            //             assert(count == 1);
-                            //             int left = stoi(assign_sig.substr(assign_sig.find("[") + 1, assign_sig.find(":") - assign_sig.find("[") - 1));
-                            //             int right = stoi(assign_sig.substr(assign_sig.find(":") + 1, assign_sig.find("]") - assign_sig.find(":") - 1));
-                            //             int len = max(left, right) - min(left, right) + 1;
-                            //             if (left > right)
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, assign_sig.find("[") + 1) + to_string(left - i) + "]");
-                            //                 }
-                            //             }
-                            //             else
-                            //             {
-                            //                 for (int i = 0; i < len; i++)
-                            //                 {
-                            //                     assign_sig_bit.push_back(assign_sig.substr(0, assign_sig.find("[") + 1) + to_string(left + i) + "]");
-                            //                 }
-                            //             }
-                            //             for (int i = 0; i < assign_sig_bit.size(); i++)
-                            //             {
-                            //                 auto iter = pin_bits.find(assign_sig_bit[i]);
-                            //                 assert(iter != pin_bits.end());
-                            //             }
-                            //         }
-                            //     }
-                            //     vector<string> assign_sig_bit_right;
-                            //     string tmp_line = "";
-                            //     for (unsigned i = 1; i < tmp.size(); ++i)
-                            //     {
-                            //         tmp_line += tmp[i];
-                            //     }
-                            //     string assign_sig_right = tmp_line.substr(tmp_line.find("{") + 1, tmp_line.find("}") - tmp_line.find("{") - 1);
-                            //     vector<string> mul_pin_assign_sig_right = Split(assign_sig_right, ",");
-                            //     if (assign_sig_right.find(":") != std::string::npos)
-                            //     {                                   
-                            //         vector<int> mul_pin_index;
-                            //         vector<string> tmp_assign_sig_bit_right;
-                            //         int cur_idx = 0;
-                            //         for (int i = 0; i < mul_pin_assign_sig_right.size(); i++)
-                            //         {
-                            //             if (mul_pin_assign_sig_right[i].find(":") != string::npos)
-                            //             {
-                            //                 mul_pin_index.push_back(i);
-                            //             }
-                            //         }
-                            //         for (int idx : mul_pin_index)
-                            //         {
-                            //             vector<string> mul_pin;
-                            //             volatile int index = 0;
-                            //             int count = 0;
-                            //             int _index = 0;
-                            //             while ((_index = mul_pin_assign_sig_right[idx].find("[", _index)) < mul_pin_assign_sig_right[idx].length())
-                            //             {
-                            //                 count++;
-                            //                 _index++;
-                            //                 index = _index;
-                            //             }
-                            //             if (count == 2)
-                            //             {
-                            //                 int index2 = 0;
-                            //                 int count2 = 0;
-                            //                 int _index2 = 0;
-                            //                 while ((_index2 = mul_pin_assign_sig_right[idx].find("]", _index2)) < mul_pin_assign_sig_right[idx].length())
-                            //                 {
-                            //                     count2++;
-                            //                     _index2++;
-                            //                     index2 = _index2;
-                            //                 }
-                            //                 assert(count2 == 2);
-                            //                 int left = stoi(mul_pin_assign_sig_right[idx].substr(index, mul_pin_assign_sig_right[idx].find(":") - (index - 1) - 1));
-                            //                 int right = stoi(mul_pin_assign_sig_right[idx].substr(mul_pin_assign_sig_right[idx].find(":") + 1, index2 - 1 - mul_pin_assign_sig_right[idx].find(":") - 1));
-                            //                 int len = max(left, right) - min(left, right) + 1; 
-                            //                 if (left > right)
-                            //                 {
-                            //                     for (int i = 0; i < len; i++)
-                            //                     {
-                            //                         mul_pin.push_back(mul_pin_assign_sig_right[idx].substr(0, index - 1 + 1) + to_string(left - i) + "]");
-                            //                     }
-                            //                 }
-                            //                 else
-                            //                 {
-                            //                     for (int i = 0; i < len; i++)
-                            //                     {
-                            //                         mul_pin.push_back(mul_pin_assign_sig_right[idx].substr(0, index - 1 + 1) + to_string(left + i) + "]");
-                            //                     }
-                            //                 }
-                            //                 for (int i = cur_idx; i < idx; i++)
-                            //                 {
-                            //                     tmp_assign_sig_bit_right.push_back(mul_pin_assign_sig_right[i]);
-                            //                 }                                           
-                            //                 for (int i = 0; i < mul_pin.size(); i++)
-                            //                 {
-                            //                     tmp_assign_sig_bit_right.push_back(mul_pin[i]);
-                            //                 }
-                            //                 cur_idx = idx + 1;
-                            //             }
-                            //             else
-                            //             {
-                            //                 assert(count == 1);
-                            //                 int left = stoi(mul_pin_assign_sig_right[idx].substr(mul_pin_assign_sig_right[idx].find("[") + 1, mul_pin_assign_sig_right[idx].find(":") - mul_pin_assign_sig_right[idx].find("[") - 1));
-                            //                 int right = stoi(mul_pin_assign_sig_right[idx].substr(mul_pin_assign_sig_right[idx].find(":") + 1, mul_pin_assign_sig_right[idx].find("]") - mul_pin_assign_sig_right[idx].find(":") - 1));
-                            //                 int len = max(left, right) - min(left, right) + 1;                                           
-                            //                 if (left > right)
-                            //                 {
-                            //                     for (int i = 0; i < len; i++)
-                            //                     {
-                            //                         mul_pin.push_back(mul_pin_assign_sig_right[idx].substr(0, mul_pin_assign_sig_right[idx].find("[") + 1) + to_string(left - i) + "]");
-                            //                     }
-                            //                 }
-                            //                 else
-                            //                 {
-                            //                     for (int i = 0; i < len; i++)
-                            //                     {
-                            //                         mul_pin.push_back(mul_pin_assign_sig_right[idx].substr(0, mul_pin_assign_sig_right[idx].find("[") + 1) + to_string(left + i) + "]");
-                            //                     }
-                            //                 }
-                            //                 for (int i = cur_idx; i < idx; i++)
-                            //                 {
-                            //                     tmp_assign_sig_bit_right.push_back(mul_pin_assign_sig_right[i]);
-                            //                 }
-                            //                 for (int i = 0; i < mul_pin.size(); i++)
-                            //                 {
-                            //                     tmp_assign_sig_bit_right.push_back(mul_pin[i]);
-                            //                 }
-                            //                 cur_idx = idx + 1;
-                            //             }
-                            //         }
-                            //         if (cur_idx != mul_pin_assign_sig_right.size())
-                            //         {
-                            //             for (int i = cur_idx; i < mul_pin_assign_sig_right.size(); i++)
-                            //             {
-                            //                 tmp_assign_sig_bit_right.push_back(mul_pin_assign_sig_right[i]);
-                            //             }
-                            //         }
-                            //         mul_pin_assign_sig_right = tmp_assign_sig_bit_right;
-                            //     }
-                            //     if (assign_sig_right.find("'") != std::string::npos)
-                            //     {
-                            //         vector<int> mul_pin_index;
-                            //         vector<string> tmp_assign_sig_bit_right;
-                            //         int cur_idx = 0;
-                            //         for (int i = 0; i < mul_pin_assign_sig_right.size(); i++)
-                            //         {
-                            //             if (mul_pin_assign_sig_right[i].find("'") != string::npos)
-                            //             {
-                            //                 mul_pin_index.push_back(i);
-                            //             }
-                            //         }
-                            //         for (int idx : mul_pin_index)
-                            //         {
-                            //             vector<string> mul_pin;
-                            //             string value_width = mul_pin_assign_sig_right[idx].substr(0, mul_pin_assign_sig_right[idx].find("'"));
-                            //             string value_value = mul_pin_assign_sig_right[idx].substr(mul_pin_assign_sig_right[idx].find("'") + 2, mul_pin_assign_sig_right[idx].size() - mul_pin_assign_sig_right[idx].find("'") - 2);
-                            //             string value_value_bin;
-                            //             // if (value_value.size() == 1)               
-                            //             //     value_value_bin = value_value;    
-                            //             // else
-                            //             //     value_value_bin = HextoBinary_x(value_value);
-                            //             string tmp_value_value_bin = HextoBinary_x(value_value);
-                            //             value_value_bin = tmp_value_value_bin.substr(tmp_value_value_bin.length() - stoi(value_width.c_str()));
-                            //             for (auto iter = value_value_bin.begin(); iter != value_value_bin.end(); iter++)
-                            //             {
-                            //                 string s(1, *iter);
-                            //                 mul_pin.push_back(s);
-                            //             }
-                            //             for (int i = cur_idx; i < idx; i++)
-                            //             {
-                            //                 tmp_assign_sig_bit_right.push_back(mul_pin_assign_sig_right[i]);
-                            //             }
-                            //             for (int i = 0; i < mul_pin.size(); i++)
-                            //             {
-                            //                 tmp_assign_sig_bit_right.push_back(mul_pin[i]);
-                            //             }
-                            //             cur_idx = idx + 1;                               
-                            //         }                                   
-                            //         if (cur_idx != mul_pin_assign_sig_right.size())
-                            //         {
-                            //             for (int i = cur_idx; i < mul_pin_assign_sig_right.size(); i++)
-                            //             {
-                            //                 tmp_assign_sig_bit_right.push_back(mul_pin_assign_sig_right[i]);
-                            //             }
-                            //         }
-                            //         mul_pin_assign_sig_right = tmp_assign_sig_bit_right;
-                            //     }
-                            //     vector<int> mul_pin_index;
-                            //     vector<string> tmp_assign_sig_bit_right;
-                            //     int cur_idx = 0;
-                            //     for (int i = 0; i < mul_pin_assign_sig_right.size(); i++)
-                            //     {
-                            //         auto find_pinbit = pin_bits.find(mul_pin_assign_sig_right[i]);
-                            //         if (find_pinbit == pin_bits.end() && mul_pin_assign_sig_right[i] != "0" && mul_pin_assign_sig_right[i] != "1" && mul_pin_assign_sig_right[i] != "x")
-                            //         {
-                            //             mul_pin_index.push_back(i);
-                            //         }
-                            //     }
-                            //     for (int idx : mul_pin_index)
-                            //     {
-                            //         vector<string> mul_pin;
-                            //         auto find_pins = pins.find(mul_pin_assign_sig_right[idx]);
-                            //         assert(find_pins != pins.end());
-                            //         int lin = pins[mul_pin_assign_sig_right[idx]].lindex;
-                            //         for (int j = 0; j < pins[mul_pin_assign_sig_right[idx]].size; j++)
-                            //         {
-                            //             std::string _name = mul_pin_assign_sig_right[idx] + "[" + to_string(lin) + "]";
-                            //             mul_pin.push_back(_name);
-                            //             if (pins[mul_pin_assign_sig_right[idx]].lindex > pins[mul_pin_assign_sig_right[idx]].rindex)
-                            //             {
-                            //                 lin--;
-                            //             }
-                            //             else
-                            //             {
-                            //                 lin++;
-                            //             }
-                            //         }
-                            //         for (int i = cur_idx; i < idx; i++)
-                            //         {
-                            //             tmp_assign_sig_bit_right.push_back(mul_pin_assign_sig_right[i]);
-                            //         }
-                            //         for (int i = 0; i < mul_pin.size(); i++)
-                            //         {
-                            //             tmp_assign_sig_bit_right.push_back(mul_pin[i]);
-                            //         }
-                            //         cur_idx = idx + 1;                                   
-                            //     }
-                            //     if (cur_idx != mul_pin_assign_sig_right.size())
-                            //     {
-                            //         for (int i = cur_idx; i < mul_pin_assign_sig_right.size(); i++)
-                            //         {
-                            //             tmp_assign_sig_bit_right.push_back(mul_pin_assign_sig_right[i]);
-                            //         }
-                            //     }
-                            //     mul_pin_assign_sig_right = tmp_assign_sig_bit_right;
-                            //     for (auto i = mul_pin_assign_sig_right.begin(); i != mul_pin_assign_sig_right.end(); i++)
-                            //     {
-                            //         auto find_pinbit = pin_bits.find(*i);
-                            //         assert(find_pinbit != pin_bits.end() || *i == "0" || *i == "1" || *i == "x");
-                            //     }
-                            //     assign_sig_bit_right = mul_pin_assign_sig_right;
-                            //     assert(assign_sig_bit.size() == assign_sig_bit_right.size());
-                            //     for (int range = 0; range < assign_sig_bit.size(); range++)
-                            //     {                                
-                            //         if (assign_sig_bit_right[range] == "1" || assign_sig_bit_right[range] == "0" || assign_sig_bit_right[range] == "x")
-                            //         {
-                            //             TimedValues *tvs = new TimedValues();
-                            //             TimedValue t_val;
-                            //             t_val.t = 0;
-                            //             t_val.value = (assign_sig_bit_right[range] == "1" ? VCD_1 : VCD_0);
-                            //             tvs->push_back(t_val);
-                            //             pinbitValues[assign_sig_bit[range]] = tvs;
-                            //         }
-                            //         else
-                            //         {
-                            //             assign_pairs[assign_sig_bit[range]] = assign_sig_bit_right[range];
-                            //         }
-                            //     }
-                            // }
-
                             string assign_sig;
                             vector<string> assign_sig_bit;
                             string assign_sig_right;
@@ -1915,7 +923,6 @@ void Parser::parse_v(std::string& v_path){
                     // lut parsing
                     else 
                     {
-                        //continue;
                         assert(tmp[2] == "=" || tmp[3] == "=");
                         assert(tmp[4] == ">>" || tmp[5] == ">>");
                         assert(tmp[tmp.size() - 1][tmp[tmp.size() - 1].size() - 1] == ';');
@@ -1923,7 +930,6 @@ void Parser::parse_v(std::string& v_path){
                         LutType cur_lut;
                         cur_lut.num = lut_num; 
                         lut_num += 1;
-                        // cur_lut.isDff = 0;
                         if (tmp[2] == "=")
                         {
                             cur_lut.out_ports = tmp[1];
@@ -1937,8 +943,6 @@ void Parser::parse_v(std::string& v_path){
                             string tmp_lut_res = tmp[4].substr(tmp[4].find("h") + 1, tmp[4].size() - tmp[4].find("h") - 1);
                             cur_lut.lut_res = tmp_lut_res;
                         }
-                        // vector<string>::iterator i = find(pin_bits.begin(), pin_bits.end(), cur_lut.out_ports);
-                        // assert(i != pin_bits.end());
                         map<string, string>::iterator i = pin_bits.find(cur_lut.out_ports);
                         assert(i != pin_bits.end());
 
@@ -2002,7 +1006,6 @@ void Parser::parse_v(std::string& v_path){
                                     int left = stoi(in_ports_vec.substr(index, in_ports_vec.find(":") - (index - 1) - 1));
                                     int right = stoi(in_ports_vec.substr(in_ports_vec.find(":") + 1, index2 - 1 - in_ports_vec.find(":") - 1));
                                     int len = max(left, right) - min(left, right) + 1;
-                                    // assert(len <= 4);
                                     if (left > right)
                                     {
                                         for (int i = 0; i < len; i++)
@@ -2020,8 +1023,6 @@ void Parser::parse_v(std::string& v_path){
                                     cur_lut.in_ports = mul_pin;
                                     for (int i = 0; i < cur_lut.in_ports.size(); i++)
                                     {
-                                        // vector<string>::iterator iter = find(pin_bits.begin(), pin_bits.end(), cur_lut.in_ports[i]);
-                                        // assert(iter != pin_bits.end());
                                         map<string, string>::iterator iter = pin_bits.find(cur_lut.in_ports[i]);
                                         assert(iter != pin_bits.end());
                                     }
@@ -2032,7 +1033,6 @@ void Parser::parse_v(std::string& v_path){
                                     int left = stoi(in_ports_vec.substr(in_ports_vec.find("[") + 1, in_ports_vec.find(":") - in_ports_vec.find("[") - 1));
                                     int right = stoi(in_ports_vec.substr(in_ports_vec.find(":") + 1, in_ports_vec.find("]") - in_ports_vec.find(":") - 1));
                                     int len = max(left, right) - min(left, right) + 1;
-                                    // assert(len <= 4);
                                     if (left > right)
                                     {
                                         for (int i = 0; i < len; i++)
@@ -2050,8 +1050,6 @@ void Parser::parse_v(std::string& v_path){
                                     cur_lut.in_ports = mul_pin;
                                     for (int i = 0; i < cur_lut.in_ports.size(); i++)
                                     {
-                                        // vector<string>::iterator iter = find(pin_bits.begin(), pin_bits.end(), cur_lut.in_ports[i]);
-                                        // assert(iter != pin_bits.end());
                                         map<string, string>::iterator iter = pin_bits.find(cur_lut.in_ports[i]);
                                         assert(iter != pin_bits.end());
                                     }
@@ -2068,8 +1066,6 @@ void Parser::parse_v(std::string& v_path){
                                 cur_lut.in_ports = tmp_in_ports;
                                 for (int i = 0; i < cur_lut.in_ports.size(); i++)
                                 {
-                                    // vector<string>::iterator iter = find(pin_bits.begin(), pin_bits.end(), cur_lut.in_ports[i]);
-                                    // assert(iter != pin_bits.end());
                                     map<string, string>::iterator iter = pin_bits.find(cur_lut.in_ports[i]);
                                     assert(iter != pin_bits.end());
                                 }
@@ -2078,8 +1074,6 @@ void Parser::parse_v(std::string& v_path){
                             else
                             {
                                 vector<string> mul_pin_in_ports = Split(in_ports_vec, ",");
-                                // vector<string> mul_pin;
-                                // map<int, vector<string>> mul_pins;
                                 vector<int> mul_pin_index;
                                 vector<string> tmp_in_ports;
                                 string in_ports = "";
@@ -2089,7 +1083,6 @@ void Parser::parse_v(std::string& v_path){
                                     if (mul_pin_in_ports[i].find(":") != string::npos)
                                     {
                                         mul_pin_index.push_back(i);
-                                        // std::cout << i << " ";
                                     }
                                 }
                                 for (int idx : mul_pin_index)
@@ -2138,12 +1131,6 @@ void Parser::parse_v(std::string& v_path){
                                         {
                                             tmp_in_ports.push_back(mul_pin_in_ports[i]);
                                         }
-                                        // debug
-                                        // for (int i = 0; i < cur_mul_pin.size(); i++) {
-                                        //     std::cout << cur_mul_pin[i] << " ";
-                                        // }
-                                        // std::cout << endl;
-
                                         for (int i = 0; i < mul_pin.size(); i++)
                                         {
                                             tmp_in_ports.push_back(mul_pin[i]);
@@ -2156,7 +1143,6 @@ void Parser::parse_v(std::string& v_path){
                                         int left = stoi(mul_pin_in_ports[idx].substr(mul_pin_in_ports[idx].find("[") + 1, mul_pin_in_ports[idx].find(":") - mul_pin_in_ports[idx].find("[") - 1));
                                         int right = stoi(mul_pin_in_ports[idx].substr(mul_pin_in_ports[idx].find(":") + 1, mul_pin_in_ports[idx].find("]") - mul_pin_in_ports[idx].find(":") - 1));
                                         int len = max(left, right) - min(left, right) + 1;
-                                        // assert(len <= 4);
                                         if (left > right)
                                         {
                                             for (int i = 0; i < len; i++)
@@ -2175,12 +1161,6 @@ void Parser::parse_v(std::string& v_path){
                                         {
                                             tmp_in_ports.push_back(mul_pin_in_ports[i]);
                                         }
-                                        // debug
-                                        // for (int i = 0; i < cur_mul_pin.size(); i++) {
-                                        //     std::cout << cur_mul_pin[i] << " ";
-                                        // }
-                                        // std::cout << endl;
-
                                         for (int i = 0; i < mul_pin.size(); i++)
                                         {
                                             tmp_in_ports.push_back(mul_pin[i]);
@@ -2198,20 +1178,9 @@ void Parser::parse_v(std::string& v_path){
                                 cur_lut.in_ports = tmp_in_ports;
                                 for (int i = 0; i < cur_lut.in_ports.size(); i++)
                                 {
-                                    // vector<string>::iterator iter = find(pin_bits.begin(), pin_bits.end(), cur_lut.in_ports[i]);
-                                    // assert(iter != pin_bits.end());
                                     map<string, string>::iterator iter = pin_bits.find(cur_lut.in_ports[i]);
                                     assert(iter != pin_bits.end());
                                 }
-                                // debug
-                                // for (vector<string>::iterator iter = cur_lut.in_ports.begin(); iter != cur_lut.in_ports.end(); iter++)
-                                // {
-                                //     in_ports += *iter + " ";
-                                // }
-                                // std::cout << "in ports: ";
-                                // std::cout.setf(ios::left);
-                                // std::cout.width(30);
-                                // std::cout << in_ports;
                             }
                         }
 
@@ -2221,226 +1190,9 @@ void Parser::parse_v(std::string& v_path){
                         {
                             net_for_id[cur_lut.in_ports[i]].push_back(cur_lut.num);
                         }
-                        // debug
-                        // string in_ports = "";
-                        // for (int i = 0; i < cur_lut.in_ports.size(); i++) {  
-                        //     in_ports += cur_lut.in_ports[i] + " ";
-                        // }
-                        // std::cout << "lut num: ";
-                        // std::cout.setf(ios::left);
-                        // std::cout.width(5);
-                        // std::cout << cur_lut.num << "   ---";
-                        // std::cout << "out ports: ";
-                        // std::cout.setf(ios::left);
-                        // std::cout.width(10);
-                        // std::cout << cur_lut.out_ports << " ";
-                        // std::cout << "in ports: ";   
-                        // std::cout.setf(ios::left);
-                        // std::cout.width(30);
-                        // std::cout << in_ports;
-                        // std::cout << "lut res: " << cur_lut.lut_res << endl;
                     }
                 }
 
-                // dff parsing
-                // else if (tmp[0] == "always")
-                // {
-                //     // DffType cur_dff;
-                //     LutType cur_lut;
-                //     cur_lut.num = lut_num;
-                //     lut_num += 1;
-                //     dff_num += 1;
-                //     cur_lut.isDff = 1;
-                //     vector<int> mark;
-                //     vector<string> sens;
-                //     vector<string> edge;
-                //     vector<vector<string>> cond; // assignment signal, condition signal, condition
-                //     vector<vector<pair<string, int>>> lut_res_cond; // the cond makes lut value 1
-                //     for (vector<string>::iterator i = tmp.begin(); i != tmp.end(); i++)
-                //     {
-                //         if (i->find(")") != string::npos)
-                //         {
-                //             mark.push_back(distance(tmp.begin(), i));
-                //         }
-                //     }
-                //     for (vector<string>::iterator i = tmp.begin() + 1; i <= tmp.begin() + mark[0]; i++)
-                //     {
-                //         if (i == tmp.begin() + 1)
-                //         {
-                //             edge.push_back(i->substr(i->find("(") + 1, i->size() - i->find("(") - 1));
-                //         }
-                //         else
-                //         {
-                //             if (distance(tmp.begin(), i) % 2)
-                //             {
-                //                 edge.push_back(*i);
-                //             }
-                //             else
-                //             {
-                //                 sens.push_back(i->substr(0, i->size() - 1));
-                //             }
-                //         }
-                //     }
-                //     assert(sens.size() == edge.size());
-                //     for (int i = 0; i < sens.size(); i++)
-                //     {
-                //         cur_lut.sens_edge.push_back(make_pair(sens[i], edge[i]));
-                //     }
-                //     if (*(tmp.begin() + mark[0] + 1) == "if")
-                //     {
-                //         // pair<string, int> cond;
-                //         // if ((tmp.begin() + mark[0] + 2)->find("!") == string::npos)
-                //         //     cond = make_pair((tmp.begin() + mark[0] + 2)->substr((tmp.begin() + mark[0] + 2)->find("(") + 1, (tmp.begin() + mark[0] + 2)->find(")") - (tmp.begin() + mark[0] + 2)->find("(") - 1), 1);
-                //         // else
-                //         //     cond = make_pair((tmp.begin() + mark[0] + 2)->substr((tmp.begin() + mark[0] + 2)->find("!") + 1, (tmp.begin() + mark[0] + 2)->find(")") - (tmp.begin() + mark[0] + 2)->find("!") - 1), 0);
-                //         // cur_lut.left = *(tmp.begin() + mark[0] + 3);
-                //         // if ((tmp.begin() + mark[0] + 5)->find("'") == string::npos)
-                //         //     cur_dff.right_cond[(tmp.begin() + mark[0] + 5)->substr(0, (tmp.begin() + mark[0] + 5)->size() - 1)] = cond;
-                //         // else
-                //         //     cur_dff.right_cond[(tmp.begin() + mark[0] + 5)->substr((tmp.begin() + mark[0] + 5)->find("'") + 2, 1)] = cond;
-                //         string if_cond;
-                //         string if_assign_sig;
-                //         string if_cond_sig;
-                //         if ((tmp.begin() + mark[0] + 2)->find("!") != string::npos)
-                //         {
-                //             if_cond_sig = (tmp.begin() + mark[0] + 2)->substr(2, (tmp.begin() + mark[0] + 2)->size() - 3);
-                //             cur_lut.in_ports.push_back(if_cond_sig);
-                //             if_cond = "0";
-                //         }
-                //         else
-                //         {
-                //             if_cond_sig = (tmp.begin() + mark[0] + 2)->substr(1, (tmp.begin() + mark[0] + 2)->size() - 2);
-                //             cur_lut.in_ports.push_back(if_cond_sig);
-                //             if_cond = "1";
-                //         }
-                //         cur_lut.in_ports.push_back(*(tmp.begin() + mark[0] + 3));
-                //         cur_lut.out_ports = *(tmp.begin() + mark[0] + 3);
-                //         if ((tmp.begin() + mark[0] + 5)->find("'") != string::npos)
-                //         {
-                //             if_assign_sig = (tmp.begin() + mark[0] + 5)->substr(0, (tmp.begin() + mark[0] + 5)->size() - 1);
-                //             cond.push_back({if_assign_sig, if_cond_sig, if_cond});
-                //         }
-                //         else
-                //         {
-                //             if_assign_sig = (tmp.begin() + mark[0] + 5)->substr(0, (tmp.begin() + mark[0] + 5)->size() - 1);
-                //             cur_lut.in_ports.push_back(if_assign_sig);
-                //             cond.push_back({if_assign_sig, if_cond_sig, if_cond});
-                //         }
-                //         std::streampos pos = inf.tellg();
-                //         getline(inf, line);
-                //         if (line.find("else") != string::npos)
-                //         {
-                //             string else_cond;
-                //             string else_assign_sig;
-                //             string else_cond_sig;
-                //             line.erase(0, line.find_first_not_of(" "));
-                //             line.erase(line.find_last_not_of(" ") + 1);
-                //             vector<std::string> _tmp;
-                //             _tmp = Split(line, delims);
-                //             assert(_tmp[0] == "else" && _tmp[1] == "if");
-                //             if (_tmp[2].find("!") != string::npos)
-                //             {
-                //                 else_cond_sig = _tmp[2].substr(2, _tmp[2].size() - 3);
-                //                 cur_lut.in_ports.push_back(else_cond_sig);
-                //                 else_cond = "0";
-                //             }
-                //             else
-                //             {
-                //                 else_cond_sig = _tmp[2].substr(1, _tmp[2].size() - 2);
-                //                 cur_lut.in_ports.push_back(else_cond_sig);
-                //                 else_cond = "1";
-                //             }      
-                //             assert(_tmp[3] == cur_lut.out_ports);
-                //             if (_tmp[5].find("'") != string::npos)
-                //             {
-                //                 else_assign_sig = _tmp[5].substr(0, _tmp[5].size() - 1);
-                //                 cond.push_back({else_assign_sig, else_cond_sig, else_cond});
-                //             }
-                //             else
-                //             {
-                //                 else_assign_sig = _tmp[5].substr(0, _tmp[5].size() - 1);
-                //                 cur_lut.in_ports.push_back(else_assign_sig);
-                //                 cond.push_back({else_assign_sig, else_cond_sig, else_cond});
-                //             }                              
-                //         }
-                //         else
-                //             inf.seekg(pos);
-                //     }
-                //     else
-                //     {
-                //         // if ((tmp.begin() + mark[0] + 3)->find("'") == string::npos)
-                //         //     cur_lut.in_ports.push_back((tmp.begin() + mark[0] + 3)->substr(0, (tmp.begin() + mark[0] + 3)->size() - 1));
-                //         // else
-                //         //     cur_dff.right_cond[(tmp.begin() + mark[0] + 3)->substr((tmp.begin() + mark[0] + 3)->find("'") + 2, 1)] = make_pair(" ", -1);
-                //         cur_lut.out_ports = *(tmp.begin() + mark[0] + 1);
-                //         cur_lut.in_ports.push_back((tmp.begin() + mark[0] + 3)->substr(0, (tmp.begin() + mark[0] + 3)->size() - 1));
-                //         cur_lut.lut_res = "2";
-                //     }
-                //     // cal lut_res
-                //     if (cond.size() == 1)
-                //     {
-                //         if (*(cond[0].begin()) == "1'h0")
-                //         {
-                //             string temp = *(cond[0].begin() + 2);
-                //             int cond_num = atoi(temp.c_str());        
-                //             lut_res_cond.push_back({make_pair(*(cond[0].begin() + 1), !cond_num), make_pair(cur_lut.out_ports, 1)});
-                //         }
-                //         else if (*(cond[0].begin()) == "1'h1")
-                //         {
-                //             string temp = *(cond[0].begin() + 2);
-                //             int cond_num = atoi(temp.c_str());
-                //             lut_res_cond.push_back({make_pair(*(cond[0].begin() + 1), cond_num)});
-                //             lut_res_cond.push_back({make_pair(*(cond[0].begin() + 1), !cond_num), make_pair(cur_lut.out_ports, 1)});
-                //         }
-                //         else
-                //         {
-                //             string temp = *(cond[0].begin() + 2);
-                //             int cond_num = atoi(temp.c_str());
-                //             lut_res_cond.push_back({make_pair(*(cond[0].begin() + 1), cond_num), make_pair(*(cond[0].begin()), 1)});
-                //             lut_res_cond.push_back({make_pair(*(cond[0].begin() + 1), !cond_num), make_pair(cur_lut.out_ports, 1)});
-                //         }
-                //     }
-                //     else
-                //     {
-                //         if (*(cond[0].begin()) == "1'h0")
-                //         {
-                //             if (*(cond[1].begin()) == "1'h0")
-                //             {                      
-                //             }
-                //             else if (*(cond[1].begin()) == "1'h1")
-                //             {
-                //             }
-                //             else
-                //             {
-                //             }
-                //         }
-                //         else if (*(cond[0].begin()) == "1'h1")
-                //         {
-                //             if (*(cond[1].begin()) == "1'h0")
-                //             {
-                //             }
-                //             else if (*(cond[1].begin()) == "1'h1")
-                //             {
-                //             }
-                //             else
-                //             {
-                //             }
-                //         }
-                //         else
-                //         {
-                //             if (*(cond[1].begin()) == "1'h0")
-                //             {
-                //             }
-                //             else if (*(cond[1].begin()) == "1'h1")
-                //             {
-                //             }
-                //             else
-                //             {
-                //             }
-                //         }
-                //     }
-                //     luts[cur_lut.num] = cur_lut;
-                // }
                 else if (tmp[0] == "always")
                 {
                     DffType cur_dff;
@@ -2545,10 +1297,6 @@ void Parser::parse_v(std::string& v_path){
                                     cond = make_pair(_tmp[2].substr(_tmp[2].find("(") + 1, _tmp[2].find(")") - _tmp[2].find("(") - 1), 1);
                                 else
                                     cond = make_pair(_tmp[2].substr(_tmp[2].find("!") + 1, _tmp[2].find(")") - _tmp[2].find("!") - 1), 0);
-                                // if (_tmp[4] == "<=")
-                                //     cur_dff.dff_out = _tmp[3];
-                                // else if (_tmp[5] == "<=")
-                                //     cur_dff.dff_out = _tmp[3] + _tmp[4];
                                 auto it = find(_tmp.begin(), _tmp.end(), "<=");
                                 if ((_tmp.begin() + distance(_tmp.begin(), it) + 1)->find(";") != string::npos)
                                 {
@@ -2582,10 +1330,6 @@ void Parser::parse_v(std::string& v_path){
                             {
                                 cur_dff.type = 2;
                                 pair<string, int> cond(" ", -1);
-                                // if (_tmp[4] == "<=")
-                                //     cur_dff.dff_out = _tmp[3];
-                                // else if (_tmp[5] == "<=")
-                                //     cur_dff.dff_out = _tmp[3] + _tmp[4];
                                 auto it = find(_tmp.begin(), _tmp.end(), "<=");
                                 if ((_tmp.begin() + distance(_tmp.begin(), it) + 1)->find(";") != string::npos)
                                 {
@@ -2685,24 +1429,10 @@ void Parser::parse_v(std::string& v_path){
                 else 
                 {               
                     continue;
-                    // string ins_type = tmp[0];
                 }
             }
         }
     }
-    // debug
-    // for(map<string, int>::iterator i = net_from_id.begin(); i != net_from_id.end(); i++) {
-    //     std::cout << i->first << "   " << i->second << endl; 
-    // }
-    // std::cout << "-------------------" << endl;
-    // for(map<string, vector<int>>::iterator i = net_for_id.begin(); i != net_for_id.end(); i++) {
-    //     std::cout << i->first << "   ";
-    //     vector<int> id_vec = i->second;
-    //     for(vector<int>::iterator j = id_vec.begin(); j != id_vec.end(); j++) {
-    //         std::cout << *j << " ";
-    //     }
-    //     std::cout << endl;
-    // }
 
     for (map<string, Pin>::iterator i = pins.begin(); i != pins.end(); i++) 
     {
@@ -2773,10 +1503,6 @@ void Parser::parse_v(std::string& v_path){
     std::cout << dff_num << endl;
     std::cout << endl;
 
-    auto end_v = std::chrono::steady_clock::now();
-    long duration_v = std::chrono::duration_cast<std::chrono::milliseconds>(end_v - start_v).count();
-    std::cout << "Successfully finished netlist file parsing. (" << duration_v << "ms) " << endl;
-    std::cout << endl;
     inf.close();
 }
 
@@ -2791,7 +1517,6 @@ vector<std::string> Parser::Split(const std::string &str, const std::string &del
     strcpy(delims, delim.c_str());
 
     char *p = strtok(strs, delims);
-
     while(p) {
         std::string s = p;
         res.push_back(s);

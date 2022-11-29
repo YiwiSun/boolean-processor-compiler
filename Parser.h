@@ -35,7 +35,6 @@ class Parser {
         map<int, DffType> get_dffs() {return dffs;}
         map<std::string, TimedValues*> get_pinbitValues() {return pinbitValues;}
         map<std::string, std::string> get_assign_pairs() {return assign_pairs;}
-        // map<std::string, DffType> get_dffs() {return dffs;} 
 
         // param
         std::string top_module_name;
@@ -51,19 +50,6 @@ class Parser {
         map<string, int> net_from_id_dff;
         map<std::string, TimedValues*> pinbitValues;  // name : TimedValues(PinBitValues), mainly for simulator, and here is for process 'assign'
         map<std::string, std::string> assign_pairs;   // assign_left : assign_right
-        
-        // friend class boost::serialization::access;
-        // template<class Archive>
-        // void serialize(Archive & ar, const unsigned int version) {
-        //     ar & top_module_name;
-        //     ar & pins;
-        //     ar & pin_bits;
-        //     ar & luts;
-        //     ar & net_for_id;
-        //     ar & net_from_id;
-        //     ar & pinbitValues;
-        //     ar & assign_pairs;
-        // }
 };
 
 #endif

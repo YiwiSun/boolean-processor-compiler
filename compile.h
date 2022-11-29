@@ -19,10 +19,13 @@ using namespace std;
 #define N_PROCESSORS_PER_CLUSTER 64
 #define N_INS_PER_PROCESSOR 512
 #define MEM_DEPTH 512
-#define N_LUTS_PER_PROCESSOR 20
-#define INTER_CLUSTER_CLK 3
-#define ACR_CLUSTER_CLK 3
+#define N_LUTS_PER_PROCESSOR 28
+#define INTER_CLUSTER_CLK 2
+#define ACR_CLUSTER_CLK 2
 #define MEMORY_INITIALIZATION_RADIX 2
+// for input initial signal changing
+#define INITIAL_JUMP_SIG "ld"
+#define INITIAL_JUMP_ADDR 474
 
 typedef struct
 {

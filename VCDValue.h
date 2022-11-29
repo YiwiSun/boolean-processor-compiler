@@ -10,7 +10,6 @@
  **/
 class VCDValue {
 
-
     //! Convert a VCDBit to a single char
     static char VCDBit2Char(VCDBit b) {
         switch(b) {
